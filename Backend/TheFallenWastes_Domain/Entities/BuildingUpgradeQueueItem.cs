@@ -27,6 +27,7 @@ namespace TheFallenWastes_Domain.Entities
         public bool IsStarted { get; private set; }
         public DateTime? StartedAtUtc { get; private set; }
         public DateTime? EndsAtUtc { get; private set; }
+        public Guid? ActiveBuildingId { get; private set; }
 
         private BuildingUpgradeQueueItem() { }
 
@@ -69,6 +70,16 @@ namespace TheFallenWastes_Domain.Entities
             IsStarted = true;
             StartedAtUtc = DateTime.UtcNow;
             EndsAtUtc = StartedAtUtc.Value.AddSeconds(durationSeconds);
+            ActiveBuildingId = null;
+        }
+
+        public void MarkStarted(int durationSeconds, Guid buildingId)
+        {
+            if (IsStarted) return;
+            IsStarted = true;
+            StartedAtUtc = DateTime.UtcNow;
+            EndsAtUtc = StartedAtUtc.Value.AddSeconds(durationSeconds);
+            ActiveBuildingId = buildingId;
         }
     }
 }

@@ -180,6 +180,7 @@ namespace TheFallenWastes_Infrastructure
                 entity.Property(x => x.EndsAtUtc);
 
                 entity.HasIndex(x => new { x.SettlementId, x.IsStarted, x.TargetLevel });
+                entity.Property(x => x.ActiveBuildingId);
             });
 
             // ----------------------------

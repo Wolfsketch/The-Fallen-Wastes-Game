@@ -418,11 +418,29 @@ namespace TheFallenWastes_WebAPI.Controllers
             // Deduct resources immediately to reserve for either immediate start or queued item
             settlement.Resources.Spend(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech);
 
+            // Create a queue item snapshot and always persist it (even when starting immediately)
+            var queueItem = new BuildingUpgradeQueueItem(
+                settlement.Id,
+                buildingType,
+                targetLevel,
+                cost.Water,
+                cost.Food,
+                cost.Scrap,
+                cost.Fuel,
+                cost.Energy,
+                cost.RareTech
+            );
+
+            _db.BuildingUpgradeQueueItems.Add(queueItem);
+
             // If there's an available active slot and this building is not currently constructing, start immediately
             if (activeCount < queueLimit && !building.IsConstructing)
             {
                 int buildTime = BuildingDefinitions.GetBuildTimeSeconds(buildingType, targetLevel);
-                building.StartUpgrade(buildTime);
+                // mark queue item as started and link to the building
+                queueItem.MarkStarted(buildTime, building.Id);
+                // start building to explicit target level
+                building.StartUpgradeToLevel(targetLevel, buildTime);
 
                 settlement.RecalculateUsedPopulation();
                 await _db.SaveChangesAsync();
@@ -444,20 +462,6 @@ namespace TheFallenWastes_WebAPI.Controllers
                 });
             }
 
-            // Otherwise create a waiting queue item (cost already deducted)
-            var queueItem = new BuildingUpgradeQueueItem(
-                settlement.Id,
-                buildingType,
-                targetLevel,
-                cost.Water,
-                cost.Food,
-                cost.Scrap,
-                cost.Fuel,
-                cost.Energy,
-                cost.RareTech
-            );
-
-            _db.BuildingUpgradeQueueItems.Add(queueItem);
             settlement.RecalculateUsedPopulation();
             await _db.SaveChangesAsync();
 
@@ -551,15 +555,42 @@ namespace TheFallenWastes_WebAPI.Controllers
                 return BadRequest("Cannot cancel active construction while higher queued upgrades exist. Cancel queued upgrades first.");
             }
 
-            var cost = BuildingDefinitions.GetUpgradeCost(buildingType, building.TargetLevel);
-            settlement.Resources.Add(
-                water: (int)Math.Ceiling(cost.Water * 0.75),
-                food: (int)Math.Ceiling(cost.Food * 0.75),
-                scrap: (int)Math.Ceiling(cost.Scrap * 0.75),
-                fuel: (int)Math.Ceiling(cost.Fuel * 0.75),
-                energy: (int)Math.Ceiling(cost.Energy * 0.75),
-                rareTech: (int)Math.Ceiling(cost.RareTech * 0.75)
-            );
+            // Try to find a started queue item linked to this active building (prefer ActiveBuildingId)
+            var startedQueueItem = await _db.BuildingUpgradeQueueItems
+                .FirstOrDefaultAsync(q => q.SettlementId == settlement.Id && q.IsStarted && q.ActiveBuildingId == building.Id);
+
+            if (startedQueueItem == null)
+            {
+                // fallback: match by target level
+                startedQueueItem = await _db.BuildingUpgradeQueueItems
+                    .FirstOrDefaultAsync(q => q.SettlementId == settlement.Id && q.IsStarted && q.BuildingType == buildingType && q.TargetLevel == building.TargetLevel);
+            }
+
+            if (startedQueueItem != null)
+            {
+                settlement.Resources.Add(
+                    water: (int)Math.Ceiling(startedQueueItem.CostWater * 0.75),
+                    food: (int)Math.Ceiling(startedQueueItem.CostFood * 0.75),
+                    scrap: (int)Math.Ceiling(startedQueueItem.CostScrap * 0.75),
+                    fuel: (int)Math.Ceiling(startedQueueItem.CostFuel * 0.75),
+                    energy: (int)Math.Ceiling(startedQueueItem.CostEnergy * 0.75),
+                    rareTech: (int)Math.Ceiling(startedQueueItem.CostRareTech * 0.75)
+                );
+
+                _db.BuildingUpgradeQueueItems.Remove(startedQueueItem);
+            }
+            else
+            {
+                var cost = BuildingDefinitions.GetUpgradeCost(buildingType, building.TargetLevel);
+                settlement.Resources.Add(
+                    water: (int)Math.Ceiling(cost.Water * 0.75),
+                    food: (int)Math.Ceiling(cost.Food * 0.75),
+                    scrap: (int)Math.Ceiling(cost.Scrap * 0.75),
+                    fuel: (int)Math.Ceiling(cost.Fuel * 0.75),
+                    energy: (int)Math.Ceiling(cost.Energy * 0.75),
+                    rareTech: (int)Math.Ceiling(cost.RareTech * 0.75)
+                );
+            }
 
             building.CancelConstruction();
 
@@ -915,6 +946,22 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (activeCount >= queueLimit)
                 return;
 
+            // First, remove any started queue items that are linked to buildings which are no longer constructing
+            var startedItems = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && q.IsStarted && q.ActiveBuildingId != null)
+                .ToListAsync();
+
+            foreach (var si in startedItems)
+            {
+                var linked = settlement.Buildings.FirstOrDefault(b => b.Id == si.ActiveBuildingId);
+                if (linked == null || !linked.IsConstructing)
+                {
+                    _db.BuildingUpgradeQueueItems.Remove(si);
+                }
+            }
+
+            await _db.SaveChangesAsync();
+
             var waiting = await _db.BuildingUpgradeQueueItems
                 .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
                 .OrderBy(q => q.CreatedAtUtc)
@@ -946,10 +993,10 @@ namespace TheFallenWastes_WebAPI.Controllers
                     continue;
 
                 int buildTime = BuildingDefinitions.GetBuildTimeSeconds(q.BuildingType, q.TargetLevel);
-                building.StartUpgrade(buildTime);
-
-                // remove queue item (we already reserved cost when queued)
-                _db.BuildingUpgradeQueueItems.Remove(q);
+                // mark queue item as started and link to the building
+                q.MarkStarted(buildTime, building.Id);
+                // start building to explicit target level
+                building.StartUpgradeToLevel(q.TargetLevel, buildTime);
 
                 activeCount++;
             }
