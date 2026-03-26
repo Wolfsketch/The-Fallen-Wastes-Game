@@ -11,7 +11,7 @@
         <div class="queue-title-row">
           <span class="queue-title">CONSTRUCTION QUEUE</span>
           <span class="queue-slots" :class="{ 'queue-slots--full': queueFull }">
-            {{ activeQueue.length }} / {{ queueLimit }}
+            {{ activeCount }} / {{ queueLimit }}
           </span>
         </div>
 
@@ -35,9 +35,9 @@
         </button>
       </div>
 
-      <div class="queue-items" v-if="activeQueue.length > 0">
+      <div class="queue-items" v-if="queueItems.length > 0">
         <div
-            v-for="(q, idx) in activeQueue"
+            v-for="(q, idx) in queueItems"
             :key="q.uniqueKey"
             class="queue-item"
         >
@@ -81,7 +81,7 @@
             :key="i"
             class="queue-dot"
             :class="{
-            'queue-dot--active': i <= activeQueue.length,
+            'queue-dot--active': i <= activeCount,
             'queue-dot--commander': i > 2
           }"
         />
@@ -165,7 +165,7 @@
           </div>
 
           <div v-else-if="b.queueFull && !b.isConstructing" class="building-queue-full">
-            QUEUE FULL ({{ activeQueue.length }}/{{ queueLimit }})
+            QUEUE FULL ({{ activeCount }}/{{ queueLimit }})
           </div>
 
           <div v-else-if="b.level === 0 && !b.isConstructing" class="building-blueprint">
@@ -175,14 +175,14 @@
       </button>
     </div>
 
-    <BuildingModal
+        <BuildingModal
         v-if="selectedBuilding"
         :building="selectedBuilding"
         :settlement="settlement"
         :live-resources="liveResources"
-        :queue-active="activeQueue.length"
+        :queue-active="activeCount"
         :queue-limit="queueLimit"
-        :queue-items="activeQueue"
+        :queue-items="queueItems"
         @close="selectedBuilding = null"
         @upgrade="onUpgrade"
     />
@@ -215,13 +215,16 @@ const now = ref(Date.now())
 let tickInterval = null
 let fetchBuildingsInFlight = null
 
-const activeQueue = ref([])
+// Full normalized queue from backend (includes constructing + waiting)
+const queueItems = ref([])
 const queueLimit = ref(2)
 const commanderActiveState = ref(false)
 const showCommanderInfo = ref(false)
 
 const commanderActive = computed(() => commanderActiveState.value)
-const queueFull = computed(() => activeQueue.value.length >= queueLimit.value)
+// Number of currently active/constructing slots (used to show active slots vs waiting)
+const activeCount = computed(() => queueItems.value.filter(q => q.isActive).length)
+const queueFull = computed(() => activeCount.value >= queueLimit.value)
 
 const categories = [
   { key: 'all', label: 'ALL' },
@@ -441,14 +444,28 @@ async function fetchBuildings() {
 
       buildings.value = (buildingsData || []).map(normalizeBuilding)
 
-      const queueRaw = queueData?.Queue ?? queueData?.queue ?? []
-      // Normalize queue items and drop items that the backend marks as completed
-      activeQueue.value = queueRaw.map(normalizeQueueItem).filter(q => !q.isCompleted)
+      // Backend may provide separate arrays for Constructing and Waiting; support those
+      const constructing = queueData?.Constructing ?? queueData?.constructing ?? []
+      const waiting = queueData?.Waiting ?? queueData?.waiting ?? []
+      const fallback = queueData?.Queue ?? queueData?.queue ?? []
+
+      const combinedRaw = [].concat(constructing, waiting, fallback)
+
+      // Normalize and de-duplicate by uniqueKey (preserve first-seen order)
+      const normalized = combinedRaw.map(normalizeQueueItem)
+      const seen = new Map()
+      for (const it of normalized) {
+        if (!it) continue
+        if (seen.has(it.uniqueKey)) continue
+        seen.set(it.uniqueKey, it)
+      }
+
+      queueItems.value = Array.from(seen.values()).filter(q => !q.isCompleted)
 
         // If the buildings list shows a building currently constructing but no queue item
         // was marked active by the backend, try to reconcile them client-side so the
         // UI remains consistent (building card shows upgrading while queue shows WAITING).
-        if (!activeQueue.value.some(q => q.isActive)) {
+        if (!queueItems.value.some(q => q.isActive)) {
           const constructingBuilding = buildings.value.find(b => b.isConstructing)
           if (constructingBuilding) {
             // Prefer an exact match by toLevel/fromLevel/position when the backend provides it,
@@ -457,7 +474,7 @@ async function fetchBuildings() {
             let match = null
 
             // Try exact matches first
-            match = activeQueue.value.find(q => {
+            match = queueItems.value.find(q => {
               if (!q) return false
               if ((q.toLevel != null) && (constructingBuilding.targetLevel != null) && (q.toLevel === constructingBuilding.targetLevel)) return true
               if ((q.fromLevel != null) && (constructingBuilding.level != null) && (q.fromLevel === constructingBuilding.level)) return true
@@ -467,12 +484,12 @@ async function fetchBuildings() {
 
             // Next prefer same type + waiting
             if (!match) {
-              match = activeQueue.value.find(q => q.type === constructingBuilding.type && q.isWaiting)
+              match = queueItems.value.find(q => q.type === constructingBuilding.type && q.isWaiting)
             }
 
             // Fallback to any same-type item
             if (!match) {
-              match = activeQueue.value.find(q => q.type === constructingBuilding.type || q.displayName === constructingBuilding.displayName)
+              match = queueItems.value.find(q => q.type === constructingBuilding.type || q.displayName === constructingBuilding.displayName)
             }
 
             if (match) {
@@ -579,7 +596,8 @@ onMounted(() => {
   tickInterval = setInterval(async () => {
     now.value = Date.now()
 
-    if (activeQueue.value.some(q => getQueueRemaining(q) <= 0)) {
+    // If any active queue item finished, refresh the data
+    if (queueItems.value.some(q => q.isActive && getQueueRemaining(q) <= 0)) {
       await fetchBuildings()
 
       if (props.refreshSettlement) {

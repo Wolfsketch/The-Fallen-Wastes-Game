@@ -87,12 +87,29 @@
           <span class="queue-info-value">{{ queueActive }} / {{ queueLimit }}</span>
 
           <span v-if="isQueueFull" class="queue-info-msg">
-            — Queue full. Finish or cancel a construction first.
+            — Queue full. Finish or cancel an active construction first.
           </span>
 
           <span v-else class="queue-info-msg queue-info-msg--ok">
             — {{ queueLimit - queueActive }} slot{{ queueLimit - queueActive !== 1 ? 's' : '' }} available
           </span>
+        </div>
+
+        <!-- Per-building queue breakdown -->
+        <div class="modal-building-queue" v-if="buildingQueue.length > 0">
+          <div class="modal-section-title">THIS BUILDING QUEUE</div>
+
+          <div class="modal-queue-row" v-for="q in buildingActiveQueue.concat(buildingWaitingQueue)" :key="q.uniqueKey">
+            <div class="modal-queue-level">L{{ q.fromLevel ?? (building.level) }} → L{{ q.toLevel ?? q.targetLevel }}</div>
+            <div class="modal-queue-status">
+              <span v-if="q.isActive" class="modal-queue-active">ACTIVE</span>
+              <span v-else class="modal-queue-waiting">WAITING</span>
+            </div>
+          </div>
+
+          <div class="modal-queue-note">
+            Cancel returns 75% resources and removes queued items in reverse order (highest queued level first).
+          </div>
         </div>
 
         <div v-if="upgradeError" class="modal-error">{{ upgradeError }}</div>
@@ -225,6 +242,11 @@ const missingPrerequisites = computed(() => {
 
 const canAfford = computed(() => costItems.value.every(c => c.enough))
 
+// Per-building queue items (from full queue list passed in)
+const buildingQueue = computed(() => (props.queueItems || []).filter(q => q.type === props.building.type))
+const buildingActiveQueue = computed(() => buildingQueue.value.filter(q => q.isActive))
+const buildingWaitingQueue = computed(() => buildingQueue.value.filter(q => q.isWaiting))
+
 const canUpgradeNow = computed(() => {
   return (
       props.building.canUpgrade &&
@@ -232,7 +254,6 @@ const canUpgradeNow = computed(() => {
       props.building.isBuildable !== false &&
       canAfford.value &&
       !isQueueFull.value &&
-      !props.building.isConstructing &&
       missingPrerequisites.value.length === 0
   )
 })
@@ -241,11 +262,12 @@ const buttonLabel = computed(() => {
   if (upgrading.value) return 'PROCESSING...'
   if (props.building.isFutureFeature) return 'FUTURE FEATURE'
   if (props.building.isBuildable === false) return 'NOT AVAILABLE'
-  if (props.building.isConstructing) return 'ALREADY IN PROGRESS...'
   if (isQueueFull.value) return 'QUEUE FULL'
   if (missingPrerequisites.value.length > 0) return 'REQUIREMENTS NOT MET'
   if (!canAfford.value) return 'INSUFFICIENT RESOURCES'
   if (!props.building.canUpgrade) return 'UPGRADE UNAVAILABLE'
+  // If this building already has an active or waiting queue entry, indicate queuing next
+  if ((buildingActiveQueue.value.length + buildingWaitingQueue.value.length) > 0) return 'QUEUE NEXT UPGRADE'
   return 'AUTHORIZE UPGRADE'
 })
 
