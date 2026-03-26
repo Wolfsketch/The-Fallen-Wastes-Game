@@ -1,0 +1,17 @@
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Application.deps.json
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Application.dll
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Application.pdb
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Domain.dll
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Infrastructure.dll
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Domain.pdb
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\bin\Debug\net10.0\TheFallenWastes_Infrastructure.pdb
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.csproj.AssemblyReference.cache
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.GeneratedMSBuildEditorConfig.editorconfig
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.AssemblyInfoInputs.cache
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.AssemblyInfo.cs
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.csproj.CoreCompileInputs.cache
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFalle.B0269115.Up2Date
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.dll
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\refint\TheFallenWastes_Application.dll
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\TheFallenWastes_Application.pdb
+G:\C#Essentials\C#Oefeningen\C#WPFAdvanced\TheFallenWastes_WebAPI\TheFallenWastes_Application\obj\Debug\net10.0\ref\TheFallenWastes_Application.dll

@@ -1,0 +1,133 @@
+/* ========================================
+   THE FALLEN WASTES — Tactical HUD Theme
+   ======================================== */
+
+:root {
+  /* Primary accent */
+  --cyan: #00d4ff;
+  --cyan-dark: #0088aa;
+  --cyan-dim: #004466;
+  --cyan-glow: rgba(0, 212, 255, 0.08);
+
+  /* Status colors */
+  --red: #ff3040;
+  --green: #30ff80;
+  --amber: #ffaa20;
+
+  /* Backgrounds */
+  --bg: #060a10;
+  --bg2: #0a1018;
+  --bg3: #0e1620;
+
+  /* Borders */
+  --border: #142030;
+  --border-bright: #1a3048;
+
+  /* Text */
+  --muted: #3a5a70;
+  --text: #8ab4cc;
+  --bright: #c0e8ff;
+
+  /* Fonts */
+  --ff: 'Rajdhani', sans-serif;
+  --ff-title: 'Orbitron', sans-serif;
+}
+
+/* Reset & base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ff);
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+/* Animations */
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dataStream {
+  0%   { opacity: 0.4; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+@keyframes horzScan {
+  0%   { left: -30%; }
+  100% { left: 130%; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* Utility */
+.fade-in {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 997;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(var(--cyan) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyan) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Accent line helper */
+.accent-line {
+  height: 1px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+  opacity: 0.3;
+}
+
+/* Tag badges */
+.tag {
+  font-size: 7px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-family: var(--ff-title);
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.tag--green  { color: var(--green);  background: rgba(48, 255, 128, 0.08); }
+.tag--amber  { color: var(--amber);  background: rgba(255, 170, 32, 0.08); }
+.tag--red    { color: var(--red);    background: rgba(255, 48, 64, 0.08); }
+.tag--cyan   { color: var(--cyan);   background: var(--cyan-glow); }
+.tag--muted  { color: var(--muted);  background: rgba(58, 90, 112, 0.08); }

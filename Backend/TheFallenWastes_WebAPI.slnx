@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TheFallenWastes_Application/TheFallenWastes_Application.csproj" />
+  <Project Path="TheFallenWastes_Domain/TheFallenWastes_Domain.csproj" />
+  <Project Path="TheFallenWastes_Infrastructure/TheFallenWastes_Infrastructure.csproj" />
+  <Project Path="TheFallenWastes_WebAPI/TheFallenWastes_WebAPI.csproj" />
+</Solution>

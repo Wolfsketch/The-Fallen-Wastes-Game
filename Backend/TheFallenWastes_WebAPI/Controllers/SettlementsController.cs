@@ -1,0 +1,912 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TheFallenWastes_Application;
+using TheFallenWastes_Application.Services;
+using TheFallenWastes_Domain.Entities;
+using TheFallenWastes_Domain.Enums;
+using TheFallenWastes_Domain.GameData;
+using TheFallenWastes_Domain.UnitFactory;
+using TheFallenWastes_Infrastructure;
+
+namespace TheFallenWastes_WebAPI.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class SettlementsController : ControllerBase
+    {
+        private readonly GameDbContext _db;
+        private readonly PlayerDataMigrationService _migrationService;
+
+        public SettlementsController(GameDbContext db, PlayerDataMigrationService migrationService)
+        {
+            _db = db;
+            _migrationService = migrationService;
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetSettlement(Guid id)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .Include(s => s.TrainingQueue)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            EnsureStarterBuildings(settlement);
+
+            var player = await _db.Players.FirstOrDefaultAsync(p => p.Id == settlement.PlayerId);
+
+            bool wasMigrated = false;
+            if (player != null)
+            {
+                wasMigrated = _migrationService.MigratePlayer(player, settlement, _db);
+                if (wasMigrated)
+                    await _db.SaveChangesAsync();
+            }
+
+            ResourceTickService.ApplyResourceTick(settlement, settlement.Buildings);
+
+            foreach (var b in settlement.Buildings)
+                b.TryCompleteConstruction();
+
+            CompleteReadyUnitTrainingInternal(settlement);
+
+            settlement.RecalculateUsedPopulation();
+
+            settlement.Resources.CapToStorage(
+                settlement.WaterCapacity,
+                settlement.FoodCapacity,
+                settlement.ScrapCapacity,
+                settlement.FuelCapacity,
+                settlement.EnergyCapacity,
+                settlement.RareTechCapacity
+            );
+
+            await _db.SaveChangesAsync();
+
+            var production = ResourceTickService.GetTotalProduction(settlement.Buildings);
+            var currentLevels = GetCurrentLevels(settlement);
+
+            int buildQueueLimit = player?.GetBuildQueueLimit() ?? 2;
+            int activeBuildCount = settlement.Buildings.Count(b => b.IsConstructing);
+            bool buildQueueFull = activeBuildCount >= buildQueueLimit;
+
+            int trainingQueueLimit = player?.GetBuildQueueLimit() ?? 2;
+            var activeTrainingQueue = settlement.TrainingQueue
+                .Where(q => !q.IsCompleted)
+                .OrderBy(q => q.EndsAtUtc)
+                .ToList();
+
+            int totalBuildingPower = settlement.Buildings.Sum(b => BuildingDefinitions.GetPowerValue(b.Type, b.Level));
+            int totalBuildingPopulationUsage = settlement.Buildings.Sum(b => BuildingDefinitions.GetPopulationUsage(b.Type, b.Level));
+
+            return Ok(new
+            {
+                settlement.Id,
+                settlement.Name,
+                settlement.PlayerId,
+                settlement.UsedPopulation,
+                settlement.PopulationCapacity,
+                settlement.AvailablePopulation,
+                settlement.Morale,
+                settlement.UnitInventory,
+
+                Resources = new
+                {
+                    settlement.Resources.Water,
+                    settlement.Resources.Food,
+                    settlement.Resources.Scrap,
+                    settlement.Resources.Fuel,
+                    settlement.Resources.Energy,
+                    settlement.Resources.RareTech
+                },
+
+                Storage = new
+                {
+                    settlement.WaterCapacity,
+                    settlement.FoodCapacity,
+                    settlement.ScrapCapacity,
+                    settlement.FuelCapacity,
+                    settlement.EnergyCapacity,
+                    settlement.RareTechCapacity
+                },
+
+                Production = new
+                {
+                    production.Water,
+                    production.Food,
+                    production.Scrap,
+                    production.Fuel,
+                    production.Energy,
+                    production.RareTech
+                },
+
+                Power = new
+                {
+                    TotalBuildingPower = totalBuildingPower
+                },
+
+                Population = new
+                {
+                    settlement.PopulationCapacity,
+                    settlement.UsedPopulation,
+                    settlement.AvailablePopulation,
+                    BuildingPopulationUsage = totalBuildingPopulationUsage
+                },
+
+                BuildQueue = new
+                {
+                    Active = activeBuildCount,
+                    Limit = buildQueueLimit,
+                    CommanderActive = player?.CommanderActive ?? false,
+                    CommanderExpiresUtc = player?.CommanderExpiresUtc
+                },
+
+                TrainingQueue = new
+                {
+                    Active = activeTrainingQueue.Count,
+                    Limit = trainingQueueLimit,
+                    CommanderActive = player?.CommanderActive ?? false,
+                    CommanderExpiresUtc = player?.CommanderExpiresUtc,
+                    Items = activeTrainingQueue.Select(q => new
+                    {
+                        q.Id,
+                        q.UnitName,
+                        q.Quantity,
+                        q.StartedAtUtc,
+                        q.EndsAtUtc,
+                        RemainingSeconds = q.GetRemainingSeconds(),
+                        PopulationCostPerUnit = q.PopulationCostPerUnit
+                    }).ToList()
+                },
+
+                Buildings = settlement.Buildings
+                    .OrderBy(b => BuildingDefinitions.GetCategory(b.Type))
+                    .ThenBy(b => b.Type)
+                    .Select(b => MapBuilding(b, currentLevels, buildQueueFull))
+            });
+        }
+
+        [HttpGet("{id}/queue")]
+        public async Task<IActionResult> GetBuildQueue(Guid id)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            foreach (var b in settlement.Buildings)
+                b.TryCompleteConstruction();
+
+            settlement.RecalculateUsedPopulation();
+
+            settlement.Resources.CapToStorage(
+                settlement.WaterCapacity,
+                settlement.FoodCapacity,
+                settlement.ScrapCapacity,
+                settlement.FuelCapacity,
+                settlement.EnergyCapacity,
+                settlement.RareTechCapacity
+            );
+
+            await _db.SaveChangesAsync();
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+
+            var constructing = settlement.Buildings
+                .Where(b => b.IsConstructing)
+                .OrderBy(b => b.ConstructionEndUtc)
+                .Select(b => new
+                {
+                    b.Id,
+                    Type = b.Type.ToString(),
+                    DisplayName = BuildingDefinitions.GetDisplayName(b.Type),
+                    b.Level,
+                    b.TargetLevel,
+                    b.ConstructionEndUtc,
+                    RemainingSeconds = b.GetRemainingSeconds(),
+                    BuildTimeSeconds = BuildingDefinitions.GetBuildTimeSeconds(b.Type, b.TargetLevel)
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                Queue = constructing,
+                Active = constructing.Count,
+                Limit = queueLimit,
+                SlotsAvailable = Math.Max(0, queueLimit - constructing.Count),
+                CommanderActive = player?.CommanderActive ?? false,
+                CommanderExpiresUtc = player?.CommanderExpiresUtc
+            });
+        }
+
+        [HttpGet("{id}/buildings")]
+        public async Task<IActionResult> GetBuildings(Guid id)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            EnsureStarterBuildings(settlement);
+
+            foreach (var b in settlement.Buildings)
+                b.TryCompleteConstruction();
+
+            settlement.RecalculateUsedPopulation();
+
+            await _db.SaveChangesAsync();
+
+            var currentLevels = GetCurrentLevels(settlement);
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+            int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
+            bool queueFull = activeCount >= queueLimit;
+
+            var result = Enum.GetValues<BuildingType>()
+                .Select(type =>
+                {
+                    var existing = settlement.Buildings.FirstOrDefault(b => b.Type == type);
+                    int level = existing?.Level ?? BuildingDefinitions.GetStartingLevel(type);
+                    int nextLevel = level + 1;
+                    bool prerequisitesMet = BuildingDefinitions.ArePrerequisitesMet(type, currentLevels);
+                    var prereqs = BuildingDefinitions.GetPrerequisites(type);
+                    bool isFutureFeature = BuildingDefinitions.IsFutureFeature(type);
+                    bool isBuildable = BuildingDefinitions.IsBuildable(type);
+
+                    return new
+                    {
+                        Id = existing?.Id,
+                        Type = type.ToString(),
+                        DisplayName = BuildingDefinitions.GetDisplayName(type),
+                        Description = BuildingDefinitions.GetDescription(type),
+                        Category = BuildingDefinitions.GetCategory(type),
+
+                        StartingLevel = BuildingDefinitions.GetStartingLevel(type),
+                        Level = existing?.Level ?? 0,
+                        EffectiveLevel = level,
+
+                        IsConstructing = existing?.IsConstructing ?? false,
+                        TargetLevel = existing?.TargetLevel ?? 0,
+                        RemainingSeconds = existing?.GetRemainingSeconds() ?? 0,
+                        ConstructionEndUtc = existing?.ConstructionEndUtc,
+
+                        IsFutureFeature = isFutureFeature,
+                        IsBuildable = isBuildable,
+                        IsLocked = (!prerequisitesMet && (existing?.Level ?? 0) == 0) || isFutureFeature,
+
+                        Prerequisites = prereqs?.Select(p => new
+                        {
+                            Type = p.RequiredType.ToString(),
+                            DisplayName = BuildingDefinitions.GetDisplayName(p.RequiredType),
+                            RequiredLevel = p.RequiredLevel,
+                            CurrentLevel = currentLevels.GetValueOrDefault(p.RequiredType, 0),
+                            IsMet = currentLevels.GetValueOrDefault(p.RequiredType, 0) >= p.RequiredLevel
+                        }),
+
+                        CanUpgrade = isBuildable
+                            && prerequisitesMet
+                            && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                            && !(existing?.IsConstructing ?? false)
+                            && !queueFull,
+
+                        QueueFull = queueFull && !(existing?.IsConstructing ?? false),
+
+                        UpgradeCost = isBuildable && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                            ? BuildingDefinitions.GetUpgradeCost(type, nextLevel)
+                            : null,
+
+                        BuildTimeSeconds = isBuildable && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                            ? BuildingDefinitions.GetBuildTimeSeconds(type, nextLevel)
+                            : 0,
+
+                        HourlyProduction = BuildingDefinitions.GetHourlyProduction(type, level),
+                        PopulationUsage = BuildingDefinitions.GetPopulationUsage(type, level),
+                        PowerValue = BuildingDefinitions.GetPowerValue(type, level),
+                        StorageBonus = BuildingDefinitions.GetStorageBonus(type, level),
+                        DefenseValue = BuildingDefinitions.GetDefenseValue(type, level)
+                    };
+                })
+                .OrderBy(b => b.IsLocked)
+                .ThenBy(b => b.Category)
+                .ThenBy(b => b.Type);
+
+            return Ok(result);
+        }
+
+        [HttpPost("{id}/buildings/upgrade")]
+        public async Task<IActionResult> UpgradeBuilding(Guid id, [FromBody] UpgradeBuildingRequest request)
+        {
+            if (!Enum.TryParse<BuildingType>(request.BuildingType, out var buildingType))
+                return BadRequest($"Unknown building type: {request.BuildingType}");
+
+            if (!BuildingDefinitions.IsBuildable(buildingType))
+                return BadRequest($"{BuildingDefinitions.GetDisplayName(buildingType)} is not buildable yet.");
+
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            EnsureStarterBuildings(settlement);
+
+            ResourceTickService.ApplyResourceTick(settlement, settlement.Buildings);
+
+            foreach (var b in settlement.Buildings)
+                b.TryCompleteConstruction();
+
+            settlement.RecalculateUsedPopulation();
+
+            var currentLevels = GetCurrentLevels(settlement);
+            if (!BuildingDefinitions.ArePrerequisitesMet(buildingType, currentLevels))
+            {
+                var prereqs = BuildingDefinitions.GetPrerequisites(buildingType);
+                var missing = prereqs?
+                    .Where(p => currentLevels.GetValueOrDefault(p.RequiredType, 0) < p.RequiredLevel)
+                    .Select(p => $"{BuildingDefinitions.GetDisplayName(p.RequiredType)} L{p.RequiredLevel}");
+
+                return BadRequest($"Prerequisites not met. Requires: {string.Join(", ", missing ?? Array.Empty<string>())}");
+            }
+
+            var building = settlement.Buildings.FirstOrDefault(b => b.Type == buildingType);
+
+            if (building == null)
+            {
+                int startingLevel = BuildingDefinitions.GetStartingLevel(buildingType);
+                building = startingLevel > 0
+                    ? Building.CreateAtLevel(settlement.Id, buildingType, startingLevel)
+                    : new Building(settlement.Id, buildingType);
+
+                _db.Buildings.Add(building);
+                settlement.Buildings.Add(building);
+            }
+
+            building.TryCompleteConstruction();
+
+            if (building.IsConstructing)
+                return BadRequest("This building is already under construction.");
+
+            int targetLevel = building.Level + 1;
+            if (targetLevel > BuildingDefinitions.MaxBuildingLevel)
+                return BadRequest($"Building is already at max level ({BuildingDefinitions.MaxBuildingLevel}).");
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+            int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
+
+            if (activeCount >= queueLimit)
+            {
+                bool hasCommander = player?.CommanderActive ?? false;
+                string msg = hasCommander
+                    ? $"Build queue full ({activeCount}/{queueLimit}). Wait for a construction to finish."
+                    : $"Build queue full ({activeCount}/{queueLimit}). Activate a Commander for +5 extra slots!";
+                return BadRequest(msg);
+            }
+
+            var cost = BuildingDefinitions.GetUpgradeCost(buildingType, targetLevel);
+            if (!settlement.Resources.HasEnough(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech))
+                return BadRequest("Not enough resources.");
+
+            settlement.Resources.Spend(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech);
+
+            int buildTime = BuildingDefinitions.GetBuildTimeSeconds(buildingType, targetLevel);
+            building.StartUpgrade(buildTime);
+
+            settlement.RecalculateUsedPopulation();
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                building.Id,
+                Type = building.Type.ToString(),
+                building.Level,
+                building.TargetLevel,
+                building.IsConstructing,
+                building.ConstructionEndUtc,
+                RemainingSeconds = building.GetRemainingSeconds(),
+                QueueUsed = activeCount + 1,
+                QueueLimit = queueLimit,
+                UsedPopulation = settlement.UsedPopulation,
+                AvailablePopulation = settlement.AvailablePopulation,
+                Message = $"{BuildingDefinitions.GetDisplayName(buildingType)} upgrade to level {targetLevel} started! ({activeCount + 1}/{queueLimit})"
+            });
+        }
+
+        [HttpPost("{id}/buildings/cancel")]
+        public async Task<IActionResult> CancelConstruction(Guid id, [FromBody] UpgradeBuildingRequest request)
+        {
+            if (!Enum.TryParse<BuildingType>(request.BuildingType, out var buildingType))
+                return BadRequest($"Unknown building type: {request.BuildingType}");
+
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            var building = settlement.Buildings.FirstOrDefault(b => b.Type == buildingType);
+            if (building == null || !building.IsConstructing)
+                return BadRequest("No active construction for this building type.");
+
+            var cost = BuildingDefinitions.GetUpgradeCost(buildingType, building.TargetLevel);
+            settlement.Resources.Add(
+                water: cost.Water / 2,
+                food: cost.Food / 2,
+                scrap: cost.Scrap / 2,
+                fuel: cost.Fuel / 2,
+                energy: cost.Energy / 2,
+                rareTech: cost.RareTech / 2
+            );
+
+            building.CancelConstruction();
+
+            settlement.RecalculateUsedPopulation();
+
+            settlement.Resources.CapToStorage(
+                settlement.WaterCapacity,
+                settlement.FoodCapacity,
+                settlement.ScrapCapacity,
+                settlement.FuelCapacity,
+                settlement.EnergyCapacity,
+                settlement.RareTechCapacity
+            );
+
+            await _db.SaveChangesAsync();
+
+            var activeCount = settlement.Buildings.Count(b => b.IsConstructing);
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+
+            return Ok(new
+            {
+                Message = "Construction cancelled. 50% resources refunded.",
+                QueueUsed = activeCount,
+                QueueLimit = queueLimit,
+                UsedPopulation = settlement.UsedPopulation,
+                AvailablePopulation = settlement.AvailablePopulation
+            });
+        }
+
+        [HttpPost("{id}/commander/activate")]
+        public async Task<IActionResult> ActivateCommander(Guid id, [FromBody] ActivateCommanderRequest? request)
+        {
+            var settlement = await _db.Settlements.FindAsync(id);
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            if (player == null)
+                return NotFound("Player not found.");
+
+            int days = request?.Days ?? 7;
+            if (days <= 0)
+                player.ActivateCommanderPermanent();
+            else
+                player.ActivateCommander(TimeSpan.FromDays(days));
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Message = $"Commander activated! Build queue expanded to {player.GetBuildQueueLimit()} slots.",
+                CommanderActive = player.CommanderActive,
+                CommanderExpiresUtc = player.CommanderExpiresUtc,
+                QueueLimit = player.GetBuildQueueLimit()
+            });
+        }
+
+        [HttpPost("{id}/commander/deactivate")]
+        public async Task<IActionResult> DeactivateCommander(Guid id)
+        {
+            var settlement = await _db.Settlements.FindAsync(id);
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            if (player == null)
+                return NotFound("Player not found.");
+
+            player.DeactivateCommander();
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Message = "Commander deactivated.",
+                QueueLimit = player.GetBuildQueueLimit()
+            });
+        }
+
+        [HttpGet("world/{seed}")]
+        public async Task<IActionResult> GetWorldSettlements(int seed)
+        {
+            var allSettlements = await _db.Settlements
+                .Include(s => s.Buildings)
+                .OrderBy(s => s.Id)
+                .ToListAsync();
+
+            var playerIds = allSettlements.Select(s => s.PlayerId).Distinct().ToList();
+            var players = await _db.Players
+                .Where(p => playerIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            Guid currentPlayerId = Guid.Empty;
+            if (Request.Headers.TryGetValue("X-Player-Id", out var playerIdHeader))
+                Guid.TryParse(playerIdHeader, out currentPlayerId);
+
+            var myRelations = new Dictionary<Guid, string>();
+            if (currentPlayerId != Guid.Empty)
+            {
+                var relations = await _db.PlayerRelations
+                    .Where(r => r.PlayerId == currentPlayerId)
+                    .ToListAsync();
+
+                foreach (var r in relations)
+                    myRelations[r.TargetPlayerId] = r.Type.ToString().ToLower();
+            }
+
+            var result = allSettlements.Select((s, index) =>
+            {
+                players.TryGetValue(s.PlayerId, out var player);
+                int defense = s.Buildings.Sum(b => BuildingDefinitions.GetDefenseValue(b.Type, b.Level));
+                int power = s.Buildings.Sum(b => BuildingDefinitions.GetPowerValue(b.Type, b.Level));
+
+                string status = s.PlayerId == currentPlayerId
+                    ? "yours"
+                    : myRelations.TryGetValue(s.PlayerId, out var rel)
+                        ? rel
+                        : "neutral";
+
+                return new
+                {
+                    s.Id,
+                    s.Name,
+                    s.PlayerId,
+                    PlayerName = player?.Username ?? "Unknown",
+                    SlotIndex = index,
+                    Score = player?.Score ?? 0,
+                    Defense = defense,
+                    Power = power,
+                    s.Morale,
+                    Status = status,
+                    IsOwn = s.PlayerId == currentPlayerId,
+                    BuildingCount = s.Buildings.Count(b => b.Level > 0),
+                };
+            });
+
+            return Ok(result);
+        }
+
+        [HttpGet("{id}/units/queue")]
+        public async Task<IActionResult> GetUnitTrainingQueue(Guid id)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.TrainingQueue)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            CompleteReadyUnitTrainingInternal(settlement);
+            settlement.RecalculateUsedPopulation();
+            await _db.SaveChangesAsync();
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+
+            var activeQueue = settlement.TrainingQueue
+                .Where(q => !q.IsCompleted)
+                .OrderBy(q => q.EndsAtUtc)
+                .Select(q => new
+                {
+                    q.Id,
+                    q.UnitName,
+                    q.Quantity,
+                    q.StartedAtUtc,
+                    q.EndsAtUtc,
+                    q.PopulationCostPerUnit,
+                    RemainingSeconds = q.GetRemainingSeconds()
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                Queue = activeQueue,
+                Active = activeQueue.Count,
+                Limit = queueLimit,
+                SlotsAvailable = Math.Max(0, queueLimit - activeQueue.Count),
+                CommanderActive = player?.CommanderActive ?? false,
+                CommanderExpiresUtc = player?.CommanderExpiresUtc
+            });
+        }
+
+        [HttpPost("{id}/units/complete-ready")]
+        public async Task<IActionResult> CompleteReadyUnitTraining(Guid id)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.TrainingQueue)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            int completed = CompleteReadyUnitTrainingInternal(settlement);
+            settlement.RecalculateUsedPopulation();
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                CompletedCount = completed,
+                UnitInventory = settlement.UnitInventory,
+                UsedPopulation = settlement.UsedPopulation,
+                PopulationCapacity = settlement.PopulationCapacity,
+                AvailablePopulation = settlement.AvailablePopulation
+            });
+        }
+
+        [HttpPost("{id}/units/train")]
+        public async Task<IActionResult> TrainUnit(Guid id, [FromBody] TrainUnitRequest request)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .Include(s => s.TrainingQueue)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            if (request.Quantity <= 0)
+                return BadRequest("Quantity must be greater than zero.");
+
+            CompleteReadyUnitTrainingInternal(settlement);
+            settlement.RecalculateUsedPopulation();
+
+            var allUnits = UnitFactory.CreateStarterUnits();
+            var unit = allUnits.FirstOrDefault(u => u.Name.Equals(request.UnitName, StringComparison.OrdinalIgnoreCase));
+
+            if (unit == null)
+                return BadRequest($"Unknown unit: {request.UnitName}");
+
+            bool facilityUnlocked = unit.Facility switch
+            {
+                ProductionFacility.Barracks => settlement.Buildings.Any(b => b.Type == BuildingType.Barracks && b.Level > 0),
+                ProductionFacility.Garage => settlement.Buildings.Any(b => b.Type == BuildingType.Garage && b.Level > 0),
+                ProductionFacility.Workshop => settlement.Buildings.Any(b => b.Type == BuildingType.Workshop && b.Level > 0),
+                ProductionFacility.CommandCenter => settlement.Buildings.Any(b => b.Type == BuildingType.CommandCenter && b.Level > 0),
+                _ => false
+            };
+
+            if (!facilityUnlocked)
+                return BadRequest($"Required facility not unlocked for {unit.Name}.");
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+            int activeQueueCount = settlement.TrainingQueue.Count(q => !q.IsCompleted);
+
+            if (activeQueueCount >= queueLimit)
+                return BadRequest($"Training queue full ({activeQueueCount}/{queueLimit}).");
+
+            var totalCost = new
+            {
+                Water = unit.Cost.Water * request.Quantity,
+                Food = unit.Cost.Food * request.Quantity,
+                Scrap = unit.Cost.Scrap * request.Quantity,
+                Fuel = unit.Cost.Fuel * request.Quantity,
+                Energy = unit.Cost.Energy * request.Quantity,
+                RareTech = unit.Cost.RareTech * request.Quantity
+            };
+
+            if (!settlement.Resources.HasEnough(
+                totalCost.Water,
+                totalCost.Food,
+                totalCost.Scrap,
+                totalCost.Fuel,
+                totalCost.Energy,
+                totalCost.RareTech))
+            {
+                return BadRequest("Not enough resources.");
+            }
+
+            int requiredPopulation = unit.CapacityCost * request.Quantity;
+            if (settlement.AvailablePopulation < requiredPopulation)
+            {
+                return BadRequest($"Not enough population. Required: {requiredPopulation}, Available: {settlement.AvailablePopulation}");
+            }
+
+            settlement.Resources.Spend(
+                totalCost.Water,
+                totalCost.Food,
+                totalCost.Scrap,
+                totalCost.Fuel,
+                totalCost.Energy,
+                totalCost.RareTech
+            );
+
+            int durationSeconds = Math.Max(1, unit.BuildTimeSeconds * request.Quantity);
+            var queueItem = settlement.QueueUnitTraining(
+                unit.Name,
+                request.Quantity,
+                unit.CapacityCost,
+                durationSeconds
+            );
+
+            _db.UnitTrainingQueueItems.Add(queueItem);
+
+            settlement.RecalculateUsedPopulation();
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Message = $"{request.Quantity}x {unit.Name} added to training queue.",
+                QueueItem = new
+                {
+                    queueItem.Id,
+                    queueItem.UnitName,
+                    queueItem.Quantity,
+                    queueItem.StartedAtUtc,
+                    queueItem.EndsAtUtc,
+                    RemainingSeconds = queueItem.GetRemainingSeconds()
+                },
+                QueueUsed = activeQueueCount + 1,
+                QueueLimit = queueLimit,
+                UsedPopulation = settlement.UsedPopulation,
+                PopulationCapacity = settlement.PopulationCapacity,
+                AvailablePopulation = settlement.AvailablePopulation
+            });
+        }
+
+        private int CompleteReadyUnitTrainingInternal(Settlement settlement)
+        {
+            if (settlement.TrainingQueue == null || settlement.TrainingQueue.Count == 0)
+                return 0;
+
+            var readyItems = settlement.TrainingQueue
+                .Where(q => !q.IsCompleted && q.IsReadyToComplete())
+                .OrderBy(q => q.EndsAtUtc)
+                .ToList();
+
+            int completedCount = 0;
+
+            foreach (var item in readyItems)
+            {
+                settlement.AddUnits(item.UnitName, item.Quantity, 0);
+                item.MarkCompleted();
+                completedCount++;
+            }
+
+            return completedCount;
+        }
+
+        private void EnsureStarterBuildings(Settlement settlement)
+        {
+            foreach (var kvp in BuildingDefinitions.StarterBuildingLevels)
+            {
+                var type = kvp.Key;
+                var level = kvp.Value;
+
+                if (!settlement.Buildings.Any(b => b.Type == type))
+                {
+                    var newBuilding = Building.CreateAtLevel(settlement.Id, type, level);
+                    settlement.Buildings.Add(newBuilding);
+                    _db.Buildings.Add(newBuilding);
+                }
+            }
+        }
+
+        private static Dictionary<BuildingType, int> GetCurrentLevels(Settlement settlement)
+        {
+            var result = Enum.GetValues<BuildingType>()
+                .ToDictionary(type => type, type => 0);
+
+            foreach (var building in settlement.Buildings)
+            {
+                if (result[building.Type] < building.Level)
+                    result[building.Type] = building.Level;
+            }
+
+            foreach (var starter in BuildingDefinitions.StarterBuildingLevels)
+            {
+                if (result[starter.Key] < starter.Value)
+                    result[starter.Key] = starter.Value;
+            }
+
+            return result;
+        }
+
+        private static object MapBuilding(Building b, Dictionary<BuildingType, int> currentLevels, bool queueFull)
+        {
+            int level = b.Level;
+            int nextLevel = level + 1;
+            bool prerequisitesMet = BuildingDefinitions.ArePrerequisitesMet(b.Type, currentLevels);
+            var prereqs = BuildingDefinitions.GetPrerequisites(b.Type);
+            bool isFutureFeature = BuildingDefinitions.IsFutureFeature(b.Type);
+            bool isBuildable = BuildingDefinitions.IsBuildable(b.Type);
+
+            return new
+            {
+                b.Id,
+                Type = b.Type.ToString(),
+                DisplayName = BuildingDefinitions.GetDisplayName(b.Type),
+                Description = BuildingDefinitions.GetDescription(b.Type),
+                Category = BuildingDefinitions.GetCategory(b.Type),
+
+                StartingLevel = BuildingDefinitions.GetStartingLevel(b.Type),
+                Level = b.Level,
+                EffectiveLevel = level,
+
+                IsConstructing = b.IsConstructing,
+                TargetLevel = b.TargetLevel,
+                RemainingSeconds = b.GetRemainingSeconds(),
+                ConstructionEndUtc = b.ConstructionEndUtc,
+
+                IsFutureFeature = isFutureFeature,
+                IsBuildable = isBuildable,
+                IsLocked = (!prerequisitesMet && b.Level == 0) || isFutureFeature,
+
+                Prerequisites = prereqs?.Select(p => new
+                {
+                    Type = p.RequiredType.ToString(),
+                    DisplayName = BuildingDefinitions.GetDisplayName(p.RequiredType),
+                    RequiredLevel = p.RequiredLevel,
+                    CurrentLevel = currentLevels.GetValueOrDefault(p.RequiredType, 0),
+                    IsMet = currentLevels.GetValueOrDefault(p.RequiredType, 0) >= p.RequiredLevel
+                }),
+
+                CanUpgrade = isBuildable
+                    && prerequisitesMet
+                    && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                    && !b.IsConstructing
+                    && !queueFull,
+
+                QueueFull = queueFull && !b.IsConstructing,
+
+                UpgradeCost = isBuildable && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                    ? BuildingDefinitions.GetUpgradeCost(b.Type, nextLevel)
+                    : null,
+
+                BuildTimeSeconds = isBuildable && nextLevel <= BuildingDefinitions.MaxBuildingLevel
+                    ? BuildingDefinitions.GetBuildTimeSeconds(b.Type, nextLevel)
+                    : 0,
+
+                HourlyProduction = BuildingDefinitions.GetHourlyProduction(b.Type, b.Level),
+                PopulationUsage = BuildingDefinitions.GetPopulationUsage(b.Type, b.Level),
+                PowerValue = BuildingDefinitions.GetPowerValue(b.Type, b.Level),
+                StorageBonus = BuildingDefinitions.GetStorageBonus(b.Type, b.Level),
+                DefenseValue = BuildingDefinitions.GetDefenseValue(b.Type, b.Level)
+            };
+        }
+    }
+
+    public class UpgradeBuildingRequest
+    {
+        public string BuildingType { get; set; } = string.Empty;
+    }
+
+    public class ActivateCommanderRequest
+    {
+        public int Days { get; set; } = 7;
+    }
+
+    public class TrainUnitRequest
+    {
+        public string UnitName { get; set; } = string.Empty;
+        public int Quantity { get; set; } = 1;
+    }
+}

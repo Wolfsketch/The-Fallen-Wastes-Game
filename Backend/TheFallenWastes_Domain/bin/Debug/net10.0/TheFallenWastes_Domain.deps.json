@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "TheFallenWastes_Domain/1.0.0": {
+        "runtime": {
+          "TheFallenWastes_Domain.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TheFallenWastes_Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
