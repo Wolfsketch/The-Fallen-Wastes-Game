@@ -63,7 +63,7 @@
 
           <button
               class="queue-item-cancel"
-              @click="cancelQueueItem(q)"
+              @click.prevent="openCancelConfirm(q)"
               title="Cancel"
           >
             ✕
@@ -85,6 +85,43 @@
             'queue-dot--commander': i > 2
           }"
         />
+      </div>
+    </div>
+
+    <!-- Cancel confirmation modal -->
+    <div v-if="confirmCancel" class="cancel-overlay">
+      <div class="cancel-card">
+        <div class="cancel-header">
+          <div class="cancel-title">Confirm cancellation</div>
+          <button class="modal-close" @click="closeCancelConfirm">✕</button>
+        </div>
+
+        <div class="cancel-body">
+          <div class="cancel-line"><strong>{{ confirmCancel.displayName }}</strong></div>
+          <div class="cancel-line">Target: L{{ confirmCancel.toLevel ?? confirmCancel.targetLevel }}</div>
+          <div class="cancel-line">Status: <em>{{ confirmCancel.isActive ? 'ACTIVE' : (confirmCancel.isWaiting ? 'WAITING' : confirmCancel.status) }}</em></div>
+
+          <div v-if="confirmCancel.cost" class="cancel-refund">
+            <div class="cancel-refund-title">Refund preview (75%):</div>
+            <div class="cancel-refund-list">
+              <div v-for="(v,k) in refundPreview(confirmCancel.cost)" :key="k" class="cancel-refund-item">
+                <span class="refund-label">{{ k.toUpperCase() }}</span>
+                <span class="refund-val">{{ v }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="cancel-refund-warning">
+            Exact refund preview unavailable for active item.
+          </div>
+
+          <div class="cancel-note">Cancelling returns ~75% of resources and removes queued items in reverse order (highest queued level first).</div>
+        </div>
+
+        <div class="cancel-actions">
+          <button class="btn btn-danger" @click="(async ()=>{ await cancelQueueItem(confirmCancel); closeCancelConfirm(); })()">Confirm Cancel</button>
+          <button class="btn" @click="closeCancelConfirm">Abort</button>
+        </div>
       </div>
     </div>
 
@@ -237,6 +274,28 @@ const categories = [
   { key: 'research', label: 'R&D' }
 ]
 
+// Cancel confirmation state
+const confirmCancel = ref(null) // will hold the queue item being confirmed
+
+function openCancelConfirm(q) {
+  confirmCancel.value = q
+}
+
+function closeCancelConfirm() {
+  confirmCancel.value = null
+}
+
+function refundPreview(cost) {
+  // cost is expected to be an object like { water: 100, scrap: 50 }
+  if (!cost) return null
+  const out = {}
+  for (const k of Object.keys(cost)) {
+    const v = Number(cost[k]) || 0
+    out[k] = Math.ceil(v * 0.75)
+  }
+  return out
+}
+
 const ICONS = {
   HeadQuarter: '🏛️',
   Shelter: '🏠',
@@ -329,11 +388,19 @@ function normalizeQueueItem(raw) {
     if (hintActive) status = 'active'
     else if (hintWaiting) status = 'waiting'
     else if (hintCompleted) status = 'completed'
+    // Hard fallback: if backend explicitly tagged the source, respect it
+    else if (raw.__queueSource) {
+      if (raw.__queueSource === 'constructing') status = 'active'
+      else if (raw.__queueSource === 'waiting') status = 'waiting'
+    }
   }
 
   const isActive = status === 'active'
   const isWaiting = status === 'waiting'
   const isCompleted = status === 'completed'
+
+  // Preserve any cost info the backend provided so we can show refund preview
+  const cost = raw.cost ?? raw.Cost ?? raw.Costs ?? raw.upgradeCost ?? raw.UpgradeCost ?? null
 
   // Some backends include explicit from/to levels or a queue position; normalize those
   const fromLevel = raw.fromLevel ?? raw.FromLevel ?? raw.level ?? raw.Level ?? null
@@ -362,7 +429,10 @@ function normalizeQueueItem(raw) {
     status,
     isActive,
     isWaiting,
-    isCompleted
+    isCompleted,
+    // raw cost data (may be null) and original source tag (if backend set it)
+    cost,
+    __queueSource: raw.__queueSource ?? null
   }
 }
 
@@ -445,11 +515,14 @@ async function fetchBuildings() {
       buildings.value = (buildingsData || []).map(normalizeBuilding)
 
       // Backend may provide separate arrays for Constructing and Waiting; support those
-      const constructing = queueData?.Constructing ?? queueData?.constructing ?? []
-      const waiting = queueData?.Waiting ?? queueData?.waiting ?? []
-      const fallback = queueData?.Queue ?? queueData?.queue ?? []
+      const constructingRaw = (queueData?.Constructing ?? queueData?.constructing ?? [])
+        .map(i => ({ ...i, __queueSource: 'constructing' }))
+      const waitingRaw = (queueData?.Waiting ?? queueData?.waiting ?? [])
+        .map(i => ({ ...i, __queueSource: 'waiting' }))
+      const fallback = (queueData?.Queue ?? queueData?.queue ?? [])
 
-      const combinedRaw = [].concat(constructing, waiting, fallback)
+      // Combine giving priority to constructing then waiting, then fallback
+      const combinedRaw = [].concat(constructingRaw, waitingRaw, fallback)
 
       // Normalize and de-duplicate by uniqueKey (preserve first-seen order)
       const normalized = combinedRaw.map(normalizeQueueItem)
@@ -460,7 +533,22 @@ async function fetchBuildings() {
         seen.set(it.uniqueKey, it)
       }
 
-      queueItems.value = Array.from(seen.values()).filter(q => !q.isCompleted)
+      // If backend tagged items as constructing/waiting, ensure the status reflects that
+      queueItems.value = Array.from(seen.values()).map(q => {
+        // If backend provided explicit __queueSource, enforce it as a fallback status
+        if (!q.status && q.__queueSource) {
+          if (q.__queueSource === 'constructing') {
+            q.status = 'active'
+            q.isActive = true
+            q.isWaiting = false
+          } else if (q.__queueSource === 'waiting') {
+            q.status = 'waiting'
+            q.isWaiting = true
+            q.isActive = false
+          }
+        }
+        return q
+      }).filter(q => !q.isCompleted)
 
         // If the buildings list shows a building currently constructing but no queue item
         // was marked active by the backend, try to reconcile them client-side so the
@@ -907,4 +995,33 @@ onUnmounted(() => {
   background: rgba(255,96,64,.04);
   border: 1px solid rgba(255,96,64,.15);
 }
+
+/* Cancel confirmation modal styles (small, using existing palette) */
+.cancel-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.6);
+  z-index: 1200;
+}
+.cancel-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 16px;
+  width: 380px;
+  box-shadow: 0 0 40px rgba(0,0,0,.6);
+}
+.cancel-header { display: flex; align-items: center; gap: 8px }
+.cancel-title { font-weight: 700; color: var(--cyan); font-family: var(--ff-title) }
+.cancel-body { margin-top: 12px }
+.cancel-line { margin-bottom: 6px; color: var(--muted) }
+.cancel-refund { margin-top: 8px; padding: 8px; background: var(--bg3); border: 1px solid var(--border) }
+.cancel-refund-list { display: flex; gap: 8px; flex-wrap: wrap }
+.cancel-refund-item { font-size: 12px; color: var(--cyan) }
+.cancel-note { margin-top: 10px; font-size: 12px; color: var(--muted) }
+.cancel-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px }
+.btn { padding: 8px 12px; border: 1px solid var(--border); background: transparent; cursor: pointer }
+.btn-danger { background: rgba(255,96,64,.06); border-color: rgba(255,96,64,.18); color: #ff6040 }
 </style>

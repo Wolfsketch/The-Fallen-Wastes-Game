@@ -214,16 +214,53 @@ namespace TheFallenWastes_WebAPI.Controllers
             var constructing = settlement.Buildings
                 .Where(b => b.IsConstructing)
                 .OrderBy(b => b.ConstructionEndUtc)
-                .Select(b => new
+                .ToList();
+
+            // Load started queue items to provide snapshot cost / refund preview for active constructions
+            var startedQueueItems = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && q.IsStarted)
+                .ToListAsync();
+
+            var constructingWithCost = constructing
+                .Select(b =>
                 {
-                    b.Id,
-                    Type = b.Type.ToString(),
-                    DisplayName = BuildingDefinitions.GetDisplayName(b.Type),
-                    b.Level,
-                    b.TargetLevel,
-                    b.ConstructionEndUtc,
-                    RemainingSeconds = b.GetRemainingSeconds(),
-                    BuildTimeSeconds = BuildingDefinitions.GetBuildTimeSeconds(b.Type, b.TargetLevel)
+                    // try match by ActiveBuildingId first
+                    var match = startedQueueItems.FirstOrDefault(q => q.ActiveBuildingId == b.Id);
+                    if (match == null)
+                    {
+                        // fallback: match by building type and target level
+                        match = startedQueueItems.FirstOrDefault(q => q.BuildingType == b.Type && q.TargetLevel == b.TargetLevel);
+                    }
+
+                    object costObj = null;
+                    object refundPreview = null;
+                    if (match != null)
+                    {
+                        costObj = new { match.CostWater, match.CostFood, match.CostScrap, match.CostFuel, match.CostEnergy, match.CostRareTech };
+                        refundPreview = new
+                        {
+                            Water = (int)Math.Ceiling(match.CostWater * 0.75),
+                            Food = (int)Math.Ceiling(match.CostFood * 0.75),
+                            Scrap = (int)Math.Ceiling(match.CostScrap * 0.75),
+                            Fuel = (int)Math.Ceiling(match.CostFuel * 0.75),
+                            Energy = (int)Math.Ceiling(match.CostEnergy * 0.75),
+                            RareTech = (int)Math.Ceiling(match.CostRareTech * 0.75)
+                        };
+                    }
+
+                    return new
+                    {
+                        b.Id,
+                        Type = b.Type.ToString(),
+                        DisplayName = BuildingDefinitions.GetDisplayName(b.Type),
+                        b.Level,
+                        b.TargetLevel,
+                        b.ConstructionEndUtc,
+                        RemainingSeconds = b.GetRemainingSeconds(),
+                        BuildTimeSeconds = BuildingDefinitions.GetBuildTimeSeconds(b.Type, b.TargetLevel),
+                        Cost = costObj,
+                        RefundPreview = refundPreview
+                    };
                 })
                 .ToList();
 
@@ -248,7 +285,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 SlotsAvailable = Math.Max(0, queueLimit - constructing.Count),
                 CommanderActive = player?.CommanderActive ?? false,
                 CommanderExpiresUtc = player?.CommanderExpiresUtc,
-                Constructing = constructing,
+                Constructing = constructingWithCost,
                 Waiting = waiting
             });
         }

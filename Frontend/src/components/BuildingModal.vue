@@ -87,7 +87,7 @@
           <span class="queue-info-value">{{ queueActive }} / {{ queueLimit }}</span>
 
           <span v-if="isQueueFull" class="queue-info-msg">
-            — Queue full. Finish or cancel an active construction first.
+            — All active slots occupied; new upgrades will be queued.
           </span>
 
           <span v-else class="queue-info-msg queue-info-msg--ok">
@@ -253,7 +253,6 @@ const canUpgradeNow = computed(() => {
       !props.building.isFutureFeature &&
       props.building.isBuildable !== false &&
       canAfford.value &&
-      !isQueueFull.value &&
       missingPrerequisites.value.length === 0
   )
 })
@@ -262,7 +261,7 @@ const buttonLabel = computed(() => {
   if (upgrading.value) return 'PROCESSING...'
   if (props.building.isFutureFeature) return 'FUTURE FEATURE'
   if (props.building.isBuildable === false) return 'NOT AVAILABLE'
-  if (isQueueFull.value) return 'QUEUE FULL'
+  // Do not block upgrade button when queue is full; waiting entries are allowed.
   if (missingPrerequisites.value.length > 0) return 'REQUIREMENTS NOT MET'
   if (!canAfford.value) return 'INSUFFICIENT RESOURCES'
   if (!props.building.canUpgrade) return 'UPGRADE UNAVAILABLE'

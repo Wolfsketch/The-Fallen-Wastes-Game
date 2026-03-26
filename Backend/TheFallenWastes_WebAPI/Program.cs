@@ -41,6 +41,23 @@ namespace TheFallenWastes_WebAPI
                 app.UseSwaggerUI();
             }
 
+            // Ensure database migrations are applied at startup so schema changes (like BuildingUpgradeQueueItems)
+            // exist when the app runs under the debugger or locally.
+            using (var scope = app.Services.CreateScope())
+            {
+                try
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+                    // db.Database.Migrate();
+                }
+                catch (Exception ex)
+                {
+                    // If migration fails, rethrow so developer sees the error during startup.
+                    Console.WriteLine($"Database migration failed: {ex}");
+                    throw;
+                }
+            }
+
             app.UseHttpsRedirection();
 
             app.UseCors();
