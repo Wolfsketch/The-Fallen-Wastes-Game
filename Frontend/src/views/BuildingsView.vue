@@ -535,16 +535,16 @@ async function fetchBuildings() {
 
       // If backend tagged items as constructing/waiting, ensure the status reflects that
       queueItems.value = Array.from(seen.values()).map(q => {
-        // If backend provided explicit __queueSource, enforce it as a fallback status
-        if (!q.status && q.__queueSource) {
-          if (q.__queueSource === 'constructing') {
-            q.status = 'active'
-            q.isActive = true
-            q.isWaiting = false
-          } else if (q.__queueSource === 'waiting') {
+        // If backend explicitly marked the source, prefer/force constructing -> active
+        if (q.__queueSource === 'constructing') {
+          q.status = 'active'
+          q.isActive = true
+          q.isWaiting = false
+        } else if (q.__queueSource === 'waiting') {
+          // Only set waiting if not already marked active
+          if (!q.isActive) {
             q.status = 'waiting'
             q.isWaiting = true
-            q.isActive = false
           }
         }
         return q
