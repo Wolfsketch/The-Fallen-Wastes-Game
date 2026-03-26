@@ -2,6 +2,11 @@
 Frontend/node_modules/
 Frontend/dist/
 Frontend/.idea/
+Frontend/*.local
+Frontend/.env.local
+Frontend/.env.development.local
+Frontend/.env.test.local
+Frontend/.env.production.local
 
 # Backend build output
 Backend/**/bin/
@@ -9,8 +14,11 @@ Backend/**/obj/
 
 # Visual Studio
 .vs/
+Backend/.vs/
 *.user
 *.suo
+
+# Copilot
 **/CopilotIndices/
 
 # General
