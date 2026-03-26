@@ -1,0 +1,137 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_webapi\\controllers\\settlementscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|solutionrelative:thefallenwastes_webapi\\controllers\\settlementscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_domain\\entities\\settlement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\settlement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_infrastructure\\gamedbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|solutionrelative:thefallenwastes_infrastructure\\gamedbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_domain\\entities\\unittrainingqueueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\unittrainingqueueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_webapi\\services\\playerdatamigrationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|solutionrelative:thefallenwastes_webapi\\services\\playerdatamigrationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_infrastructure\\migrations\\20260324112202_addunittrainingqueue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|solutionrelative:thefallenwastes_infrastructure\\migrations\\20260324112202_addunittrainingqueue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 10,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c64b9c2-e352-428e-a56d-0ace190b99a6}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "20260324112202_AddUnitTrainingQueue.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
+              "RelativeToolTip": "TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAAAAoAAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-24T11:22:03.17Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "GameDBContext.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "RelativeToolTip": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "ViewState": "AgIAAO8AAAAAAAAAAAAUwAgBAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-24T10:20:09.179Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "UnitTrainingQueueItem.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
+              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
+              "ViewState": "AgIAAD8AAAAAAAAAAAAUwFgAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-24T10:12:04.345Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PlayerDataMigrationService.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
+              "RelativeToolTip": "TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
+              "ViewState": "AgIAAEAAAAAAAAAAAAAUwFkAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-24T09:49:02.575Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Settlement.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\Settlement.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\Settlement.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\Settlement.cs",
+              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\Settlement.cs",
+              "ViewState": "AgIAAFYBAAAAAAAAAAAUwG8BAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-23T21:23:13.258Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "SettlementsController.cs",
+              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "RelativeToolTip": "TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "ViewState": "AgIAAF4CAAAAAAAAAAAswHACAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-23T21:21:02.139Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
