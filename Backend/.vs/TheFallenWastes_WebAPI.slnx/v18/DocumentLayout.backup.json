@@ -1,30 +1,25 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\",
+  "WorkspaceRootPath": "F:\\The-Fallen-Wastes-Game\\Backend\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_webapi\\controllers\\settlementscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|f:\\the-fallen-wastes-game\\backend\\thefallenwastes_webapi\\controllers\\settlementscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|solutionrelative:thefallenwastes_webapi\\controllers\\settlementscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_domain\\entities\\settlement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\settlement.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|f:\\the-fallen-wastes-game\\backend\\thefallenwastes_domain\\entities\\buildingupgradequeueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\buildingupgradequeueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_infrastructure\\gamedbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|f:\\the-fallen-wastes-game\\backend\\thefallenwastes_infrastructure\\gamedbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|solutionrelative:thefallenwastes_infrastructure\\gamedbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_domain\\entities\\unittrainingqueueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\unittrainingqueueitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|f:\\the-fallen-wastes-game\\backend\\thefallenwastes_domain\\entities\\building.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F468CFF9-9793-852C-E628-2165DC587EA3}|TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj|solutionrelative:thefallenwastes_domain\\entities\\building.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_webapi\\services\\playerdatamigrationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{B6819B13-5980-3F8B-F423-71BD7DE7D425}|TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI.csproj|solutionrelative:thefallenwastes_webapi\\services\\playerdatamigrationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|g:\\c#essentials\\c#oefeningen\\c#wpfadvanced\\thefallenwastes_webapi\\thefallenwastes_infrastructure\\migrations\\20260324112202_addunittrainingqueue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{6A3D8BAC-A1B2-5D18-4063-31A365F9B618}|TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj|solutionrelative:thefallenwastes_infrastructure\\migrations\\20260324112202_addunittrainingqueue.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\jason\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-596cbc64-15f6-400a-a244-9bdbede6f5e8.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
     }
   ],
   "DocumentGroupContainers": [
@@ -34,7 +29,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 10,
+          "SelectedChildIndex": 6,
           "Children": [
             {
               "$type": "Bookmark",
@@ -58,76 +53,65 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "20260324112202_AddUnitTrainingQueue.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
-              "RelativeDocumentMoniker": "TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
-              "RelativeToolTip": "TheFallenWastes_Infrastructure\\Migrations\\20260324112202_AddUnitTrainingQueue.cs",
-              "ViewState": "AgIAAAYAAAAAAAAAAAAAAAoAAAAaAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-24T11:22:03.17Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "GameDBContext.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
-              "RelativeDocumentMoniker": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
-              "RelativeToolTip": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
-              "ViewState": "AgIAAO8AAAAAAAAAAAAUwAgBAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-24T10:20:09.179Z"
-            },
-            {
-              "$type": "Document",
               "DocumentIndex": 3,
-              "Title": "UnitTrainingQueueItem.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
-              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
-              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\UnitTrainingQueueItem.cs",
-              "ViewState": "AgIAAD8AAAAAAAAAAAAUwFgAAAABAAAAAAAAAA==",
+              "Title": "Building.cs",
+              "DocumentMoniker": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\Entities\\Building.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\Building.cs",
+              "ToolTip": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\Entities\\Building.cs",
+              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\Building.cs",
+              "ViewState": "AgIAACEAAAAAAAAAAAAvwAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-24T10:12:04.345Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "PlayerDataMigrationService.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
-              "RelativeDocumentMoniker": "TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
-              "RelativeToolTip": "TheFallenWastes_WebAPI\\Services\\PlayerDataMigrationService.cs",
-              "ViewState": "AgIAAEAAAAAAAAAAAAAUwFkAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-24T09:49:02.575Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "Settlement.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\Settlement.cs",
-              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\Settlement.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\Entities\\Settlement.cs",
-              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\Settlement.cs",
-              "ViewState": "AgIAAFYBAAAAAAAAAAAUwG8BAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-23T21:23:13.258Z"
+              "WhenOpened": "2026-03-26T18:12:03.809Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": "SettlementsController.cs",
-              "DocumentMoniker": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "DocumentMoniker": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
               "RelativeDocumentMoniker": "TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
-              "ToolTip": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
+              "ToolTip": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
               "RelativeToolTip": "TheFallenWastes_WebAPI\\Controllers\\SettlementsController.cs",
-              "ViewState": "AgIAAF4CAAAAAAAAAAAswHACAAAaAAAAAAAAAA==",
+              "ViewState": "AgIAADYCAAAAAAAAAAAqwN4BAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-23T21:21:02.139Z",
+              "WhenOpened": "2026-03-26T17:56:14.07Z",
               "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "GameDBContext.cs",
+              "DocumentMoniker": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "ToolTip": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "RelativeToolTip": "TheFallenWastes_Infrastructure\\GameDBContext.cs",
+              "ViewState": "AgIAAKcAAAAAAAAAAAAawAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-26T17:55:35.531Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "BuildingUpgradeQueueItem.cs",
+              "DocumentMoniker": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\Entities\\BuildingUpgradeQueueItem.cs",
+              "RelativeDocumentMoniker": "TheFallenWastes_Domain\\Entities\\BuildingUpgradeQueueItem.cs",
+              "ToolTip": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\Entities\\BuildingUpgradeQueueItem.cs",
+              "RelativeToolTip": "TheFallenWastes_Domain\\Entities\\BuildingUpgradeQueueItem.cs",
+              "ViewState": "AgIAABMAAAAAAAAAAIA7wFUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-26T17:55:24.849Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "plan-596cbc64-15f6-400a-a244-9bdbede6f5e8.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\jason\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-596cbc64-15f6-400a-a244-9bdbede6f5e8.md",
+              "ToolTip": "C:\\Users\\jason\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-596cbc64-15f6-400a-a244-9bdbede6f5e8.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-26T17:54:42.987Z",
+              "EditorCaption": " [Preview]"
             }
           ]
         }

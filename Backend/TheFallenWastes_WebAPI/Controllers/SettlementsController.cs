@@ -79,6 +79,10 @@ namespace TheFallenWastes_WebAPI.Controllers
             int activeBuildCount = settlement.Buildings.Count(b => b.IsConstructing);
             bool buildQueueFull = activeBuildCount >= buildQueueLimit;
 
+            var waitingCount = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
+                .CountAsync();
+
             int trainingQueueLimit = player?.GetBuildQueueLimit() ?? 2;
             var activeTrainingQueue = settlement.TrainingQueue
                 .Where(q => !q.IsCompleted)
@@ -146,6 +150,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 {
                     Active = activeBuildCount,
                     Limit = buildQueueLimit,
+                    Waiting = waitingCount,
                     CommanderActive = player?.CommanderActive ?? false,
                     CommanderExpiresUtc = player?.CommanderExpiresUtc
                 },
@@ -274,12 +279,23 @@ namespace TheFallenWastes_WebAPI.Controllers
             int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
             bool queueFull = activeCount >= queueLimit;
 
+            // Gather queued info per building type so UI can decide about chained queuing
+            var allQueued = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id)
+                .ToListAsync();
+            var waitingCounts = allQueued.Where(q => !q.IsStarted).GroupBy(q => q.BuildingType)
+                .ToDictionary(g => g.Key, g => g.Count());
+            var highestQueuedTarget = allQueued.GroupBy(q => q.BuildingType)
+                .ToDictionary(g => g.Key, g => g.Max(x => x.TargetLevel));
+
             var result = Enum.GetValues<BuildingType>()
                 .Select(type =>
                 {
                     var existing = settlement.Buildings.FirstOrDefault(b => b.Type == type);
                     int level = existing?.Level ?? BuildingDefinitions.GetStartingLevel(type);
-                    int nextLevel = level + 1;
+                    int queuedMax = highestQueuedTarget.GetValueOrDefault(type, 0);
+                    int baseLevel = Math.Max(level, existing?.TargetLevel ?? 0);
+                    int nextLevel = Math.Max(baseLevel, queuedMax) + 1;
                     bool prerequisitesMet = BuildingDefinitions.ArePrerequisitesMet(type, currentLevels);
                     var prereqs = BuildingDefinitions.GetPrerequisites(type);
                     bool isFutureFeature = BuildingDefinitions.IsFutureFeature(type);
@@ -315,13 +331,15 @@ namespace TheFallenWastes_WebAPI.Controllers
                             IsMet = currentLevels.GetValueOrDefault(p.RequiredType, 0) >= p.RequiredLevel
                         }),
 
+                        // allow queuing upgrades for same building even when active; frontend should validate resources
                         CanUpgrade = isBuildable
                             && prerequisitesMet
-                            && nextLevel <= BuildingDefinitions.MaxBuildingLevel
-                            && !(existing?.IsConstructing ?? false)
-                            && !queueFull,
+                            && nextLevel <= BuildingDefinitions.MaxBuildingLevel,
 
-                        QueueFull = queueFull && !(existing?.IsConstructing ?? false),
+                        // overall queue full indicates no free active slots; queuing still allowed (waiting)
+                        QueueFull = queueFull,
+                        QueuedCount = waitingCounts.GetValueOrDefault(type, 0),
+                        NextQueuedLevel = queuedMax > 0 ? queuedMax + 1 : (int?)null,
 
                         UpgradeCost = isBuildable && nextLevel <= BuildingDefinitions.MaxBuildingLevel
                             ? BuildingDefinitions.GetUpgradeCost(type, nextLevel)

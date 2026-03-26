@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TheFallenWastes_WebAPI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+32ffa053eb548b17ad64c4cc84bb60c78ecf53cb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+037736313aea497af277300bba7d087d4f9626a8")]
 [assembly: System.Reflection.AssemblyProductAttribute("TheFallenWastes_WebAPI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TheFallenWastes_WebAPI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

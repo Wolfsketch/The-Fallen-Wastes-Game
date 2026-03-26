@@ -44,8 +44,19 @@ namespace TheFallenWastes_Domain.Entities
         {
             if (IsConstructing)
                 throw new InvalidOperationException("Building is already under construction.");
+            // default behaviour: upgrade to next level
+            StartUpgradeToLevel(Level + 1, buildTimeSeconds);
+        }
 
-            TargetLevel = Level + 1;
+        public void StartUpgradeToLevel(int targetLevel, int buildTimeSeconds)
+        {
+            if (IsConstructing)
+                throw new InvalidOperationException("Building is already under construction.");
+
+            if (targetLevel <= Level)
+                throw new InvalidOperationException("Target level must be greater than current level.");
+
+            TargetLevel = targetLevel;
             IsConstructing = true;
             ConstructionStartUtc = DateTime.UtcNow;
             ConstructionEndUtc = DateTime.UtcNow.AddSeconds(buildTimeSeconds);
