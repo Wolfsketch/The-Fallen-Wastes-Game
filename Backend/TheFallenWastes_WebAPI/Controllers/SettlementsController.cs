@@ -268,6 +268,8 @@ namespace TheFallenWastes_WebAPI.Controllers
             foreach (var b in settlement.Buildings)
                 b.TryCompleteConstruction();
 
+            await StartNextQueuedConstructionsInternal(settlement);
+
             settlement.RecalculateUsedPopulation();
 
             await _db.SaveChangesAsync();
@@ -584,31 +586,22 @@ namespace TheFallenWastes_WebAPI.Controllers
                     .FirstOrDefaultAsync(q => q.SettlementId == settlement.Id && q.IsStarted && q.BuildingType == buildingType && q.TargetLevel == building.TargetLevel);
             }
 
-            if (startedQueueItem != null)
+            if (startedQueueItem == null)
             {
-                settlement.Resources.Add(
-                    water: (int)Math.Ceiling(startedQueueItem.CostWater * 0.75),
-                    food: (int)Math.Ceiling(startedQueueItem.CostFood * 0.75),
-                    scrap: (int)Math.Ceiling(startedQueueItem.CostScrap * 0.75),
-                    fuel: (int)Math.Ceiling(startedQueueItem.CostFuel * 0.75),
-                    energy: (int)Math.Ceiling(startedQueueItem.CostEnergy * 0.75),
-                    rareTech: (int)Math.Ceiling(startedQueueItem.CostRareTech * 0.75)
-                );
+                // Missing snapshot for active construction: treat as inconsistency and refuse to cancel here.
+                return BadRequest("Inconsistent state: missing queue snapshot for active construction. Cancel queued items first or contact support.");
+            }
 
-                _db.BuildingUpgradeQueueItems.Remove(startedQueueItem);
-            }
-            else
-            {
-                var cost = BuildingDefinitions.GetUpgradeCost(buildingType, building.TargetLevel);
-                settlement.Resources.Add(
-                    water: (int)Math.Ceiling(cost.Water * 0.75),
-                    food: (int)Math.Ceiling(cost.Food * 0.75),
-                    scrap: (int)Math.Ceiling(cost.Scrap * 0.75),
-                    fuel: (int)Math.Ceiling(cost.Fuel * 0.75),
-                    energy: (int)Math.Ceiling(cost.Energy * 0.75),
-                    rareTech: (int)Math.Ceiling(cost.RareTech * 0.75)
-                );
-            }
+            settlement.Resources.Add(
+                water: (int)Math.Ceiling(startedQueueItem.CostWater * 0.75),
+                food: (int)Math.Ceiling(startedQueueItem.CostFood * 0.75),
+                scrap: (int)Math.Ceiling(startedQueueItem.CostScrap * 0.75),
+                fuel: (int)Math.Ceiling(startedQueueItem.CostFuel * 0.75),
+                energy: (int)Math.Ceiling(startedQueueItem.CostEnergy * 0.75),
+                rareTech: (int)Math.Ceiling(startedQueueItem.CostRareTech * 0.75)
+            );
+
+            _db.BuildingUpgradeQueueItems.Remove(startedQueueItem);
 
             building.CancelConstruction();
 
