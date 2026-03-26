@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj": {}
+    "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj": {}
   },
   "projects": {
-    "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj": {
+    "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj",
+        "projectUniqueName": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj",
         "projectName": "TheFallenWastes_Application",
-        "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj",
+        "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Application\\TheFallenWastes_Application.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Application\\obj\\",
+        "outputPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Application\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -34,11 +34,11 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
-                "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj"
+              "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
+                "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj"
               },
-              "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj": {
-                "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj"
+              "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj": {
+                "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj"
               }
             }
           }
@@ -359,14 +359,14 @@
         }
       }
     },
-    "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
+    "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj",
+        "projectUniqueName": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj",
         "projectName": "TheFallenWastes_Domain",
-        "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj",
+        "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\obj\\",
+        "outputPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -701,14 +701,14 @@
         }
       }
     },
-    "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj": {
+    "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
+        "projectUniqueName": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
         "projectName": "TheFallenWastes_Infrastructure",
-        "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
+        "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
         "packagesPath": "C:\\Users\\jason\\.nuget\\packages\\",
-        "outputPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\obj\\",
+        "outputPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -731,8 +731,8 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
-                "projectPath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj"
+              "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj": {
+                "projectPath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Domain\\TheFallenWastes_Domain.csproj"
               }
             }
           }

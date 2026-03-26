@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "ZON6m+cQCLI=",
+  "dgSpecHash": "S/FQIJcTI08=",
   "success": true,
-  "projectFilePath": "G:\\C#Essentials\\C#Oefeningen\\C#WPFAdvanced\\TheFallenWastes_WebAPI\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
+  "projectFilePath": "F:\\The-Fallen-Wastes-Game\\Backend\\TheFallenWastes_Infrastructure\\TheFallenWastes_Infrastructure.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\jason\\.nuget\\packages\\azure.core\\1.47.1\\azure.core.1.47.1.nupkg.sha512",
     "C:\\Users\\jason\\.nuget\\packages\\azure.identity\\1.14.2\\azure.identity.1.14.2.nupkg.sha512",

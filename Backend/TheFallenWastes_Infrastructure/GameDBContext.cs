@@ -26,6 +26,7 @@ namespace TheFallenWastes_Infrastructure
         public DbSet<SettlementSalvageInventory> SettlementSalvageInventories { get; set; }
 
         public DbSet<UnitTrainingQueueItem> UnitTrainingQueueItems { get; set; }
+        public DbSet<BuildingUpgradeQueueItem> BuildingUpgradeQueueItems { get; set; }
 
         public GameDbContext(DbContextOptions<GameDbContext> options)
             : base(options)
@@ -148,6 +149,37 @@ namespace TheFallenWastes_Infrastructure
                 entity.Property(x => x.CompletedAtUtc);
 
                 entity.HasIndex(x => new { x.SettlementId, x.IsCompleted, x.EndsAtUtc });
+            });
+
+            // ----------------------------
+            // BUILDING UPGRADE QUEUE
+            // ----------------------------
+
+            modelBuilder.Entity<BuildingUpgradeQueueItem>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.BuildingType)
+                    .IsRequired()
+                    .HasConversion<string>()
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.TargetLevel).IsRequired();
+
+                entity.Property(x => x.CostWater);
+                entity.Property(x => x.CostFood);
+                entity.Property(x => x.CostScrap);
+                entity.Property(x => x.CostFuel);
+                entity.Property(x => x.CostEnergy);
+                entity.Property(x => x.CostRareTech);
+
+                entity.Property(x => x.CreatedAtUtc).IsRequired();
+
+                entity.Property(x => x.IsStarted).IsRequired();
+                entity.Property(x => x.StartedAtUtc);
+                entity.Property(x => x.EndsAtUtc);
+
+                entity.HasIndex(x => new { x.SettlementId, x.IsStarted, x.TargetLevel });
             });
 
             // ----------------------------

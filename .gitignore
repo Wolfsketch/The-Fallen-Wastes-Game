@@ -1,0 +1,17 @@
+# Frontend
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.idea/
+
+# Backend build output
+Backend/**/bin/
+Backend/**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# General
+.env
+.DS_Store

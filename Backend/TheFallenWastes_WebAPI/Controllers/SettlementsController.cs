@@ -57,6 +57,8 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             CompleteReadyUnitTrainingInternal(settlement);
 
+            await StartNextQueuedConstructionsInternal(settlement);
+
             settlement.RecalculateUsedPopulation();
 
             settlement.Resources.CapToStorage(
@@ -186,6 +188,8 @@ namespace TheFallenWastes_WebAPI.Controllers
             foreach (var b in settlement.Buildings)
                 b.TryCompleteConstruction();
 
+            await StartNextQueuedConstructionsInternal(settlement);
+
             settlement.RecalculateUsedPopulation();
 
             settlement.Resources.CapToStorage(
@@ -218,14 +222,29 @@ namespace TheFallenWastes_WebAPI.Controllers
                 })
                 .ToList();
 
+            var waiting = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
+                .OrderBy(q => q.CreatedAtUtc)
+                .Select(q => new
+                {
+                    q.Id,
+                    Type = q.BuildingType.ToString(),
+                    DisplayName = BuildingDefinitions.GetDisplayName(q.BuildingType),
+                    q.TargetLevel,
+                    q.CreatedAtUtc,
+                    Cost = new { q.CostWater, q.CostFood, q.CostScrap, q.CostFuel, q.CostEnergy, q.CostRareTech }
+                })
+                .ToListAsync();
+
             return Ok(new
             {
-                Queue = constructing,
                 Active = constructing.Count,
                 Limit = queueLimit,
                 SlotsAvailable = Math.Max(0, queueLimit - constructing.Count),
                 CommanderActive = player?.CommanderActive ?? false,
-                CommanderExpiresUtc = player?.CommanderExpiresUtc
+                CommanderExpiresUtc = player?.CommanderExpiresUtc,
+                Constructing = constructing,
+                Waiting = waiting
             });
         }
 
@@ -377,10 +396,14 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             building.TryCompleteConstruction();
 
-            if (building.IsConstructing)
-                return BadRequest("This building is already under construction.");
+            // Determine the next target level taking into account existing queued items
+            var existingQueued = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && q.BuildingType == buildingType && !q.IsStarted)
+                .ToListAsync();
 
-            int targetLevel = building.Level + 1;
+            int highestQueuedTarget = existingQueued.Any() ? existingQueued.Max(q => q.TargetLevel) : 0;
+            int currentBase = building != null ? Math.Max(building.Level, building.TargetLevel) : BuildingDefinitions.GetStartingLevel(buildingType);
+            int targetLevel = Math.Max(currentBase, highestQueuedTarget) + 1;
             if (targetLevel > BuildingDefinitions.MaxBuildingLevel)
                 return BadRequest($"Building is already at max level ({BuildingDefinitions.MaxBuildingLevel}).");
 
@@ -388,42 +411,64 @@ namespace TheFallenWastes_WebAPI.Controllers
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
             int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
 
-            if (activeCount >= queueLimit)
-            {
-                bool hasCommander = player?.CommanderActive ?? false;
-                string msg = hasCommander
-                    ? $"Build queue full ({activeCount}/{queueLimit}). Wait for a construction to finish."
-                    : $"Build queue full ({activeCount}/{queueLimit}). Activate a Commander for +5 extra slots!";
-                return BadRequest(msg);
-            }
-
             var cost = BuildingDefinitions.GetUpgradeCost(buildingType, targetLevel);
             if (!settlement.Resources.HasEnough(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech))
                 return BadRequest("Not enough resources.");
 
+            // Deduct resources immediately to reserve for either immediate start or queued item
             settlement.Resources.Spend(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech);
 
-            int buildTime = BuildingDefinitions.GetBuildTimeSeconds(buildingType, targetLevel);
-            building.StartUpgrade(buildTime);
+            // If there's an available active slot and this building is not currently constructing, start immediately
+            if (activeCount < queueLimit && !building.IsConstructing)
+            {
+                int buildTime = BuildingDefinitions.GetBuildTimeSeconds(buildingType, targetLevel);
+                building.StartUpgrade(buildTime);
 
+                settlement.RecalculateUsedPopulation();
+                await _db.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    building.Id,
+                    Type = building.Type.ToString(),
+                    building.Level,
+                    building.TargetLevel,
+                    building.IsConstructing,
+                    building.ConstructionEndUtc,
+                    RemainingSeconds = building.GetRemainingSeconds(),
+                    QueueUsed = activeCount + 1,
+                    QueueLimit = queueLimit,
+                    UsedPopulation = settlement.UsedPopulation,
+                    AvailablePopulation = settlement.AvailablePopulation,
+                    Message = $"{BuildingDefinitions.GetDisplayName(buildingType)} upgrade to level {targetLevel} started! ({activeCount + 1}/{queueLimit})"
+                });
+            }
+
+            // Otherwise create a waiting queue item (cost already deducted)
+            var queueItem = new BuildingUpgradeQueueItem(
+                settlement.Id,
+                buildingType,
+                targetLevel,
+                cost.Water,
+                cost.Food,
+                cost.Scrap,
+                cost.Fuel,
+                cost.Energy,
+                cost.RareTech
+            );
+
+            _db.BuildingUpgradeQueueItems.Add(queueItem);
             settlement.RecalculateUsedPopulation();
-
             await _db.SaveChangesAsync();
 
             return Ok(new
             {
-                building.Id,
-                Type = building.Type.ToString(),
-                building.Level,
-                building.TargetLevel,
-                building.IsConstructing,
-                building.ConstructionEndUtc,
-                RemainingSeconds = building.GetRemainingSeconds(),
-                QueueUsed = activeCount + 1,
+                QueueItem = new { queueItem.Id, Type = buildingType.ToString(), queueItem.TargetLevel, queueItem.CreatedAtUtc },
+                QueueUsed = activeCount,
                 QueueLimit = queueLimit,
                 UsedPopulation = settlement.UsedPopulation,
                 AvailablePopulation = settlement.AvailablePopulation,
-                Message = $"{BuildingDefinitions.GetDisplayName(buildingType)} upgrade to level {targetLevel} started! ({activeCount + 1}/{queueLimit})"
+                Message = $"{BuildingDefinitions.GetDisplayName(buildingType)} upgrade to level {targetLevel} queued."
             });
         }
 
@@ -441,17 +486,79 @@ namespace TheFallenWastes_WebAPI.Controllers
                 return NotFound("Settlement not found.");
 
             var building = settlement.Buildings.FirstOrDefault(b => b.Type == buildingType);
+
+            // Load waiting items for this settlement/building
+            var waitingForBuilding = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && q.BuildingType == buildingType && !q.IsStarted)
+                .OrderByDescending(q => q.TargetLevel)
+                .ToListAsync();
+
+            // If there are waiting items, cancel the top-most (LIFO) by default
+            var topQueued = waitingForBuilding.FirstOrDefault();
+            if (topQueued != null)
+            {
+                // Refund 75% of the snapshot cost
+                settlement.Resources.Add(
+                    water: (int)Math.Ceiling(topQueued.CostWater * 0.75),
+                    food: (int)Math.Ceiling(topQueued.CostFood * 0.75),
+                    scrap: (int)Math.Ceiling(topQueued.CostScrap * 0.75),
+                    fuel: (int)Math.Ceiling(topQueued.CostFuel * 0.75),
+                    energy: (int)Math.Ceiling(topQueued.CostEnergy * 0.75),
+                    rareTech: (int)Math.Ceiling(topQueued.CostRareTech * 0.75)
+                );
+
+                _db.BuildingUpgradeQueueItems.Remove(topQueued);
+
+                settlement.RecalculateUsedPopulation();
+
+                settlement.Resources.CapToStorage(
+                    settlement.WaterCapacity,
+                    settlement.FoodCapacity,
+                    settlement.ScrapCapacity,
+                    settlement.FuelCapacity,
+                    settlement.EnergyCapacity,
+                    settlement.RareTechCapacity
+                );
+
+                await _db.SaveChangesAsync();
+
+                // After removing a waiting item, try to start next queued upgrades
+                await StartNextQueuedConstructionsInternal(settlement);
+
+                var activeCountAfter = settlement.Buildings.Count(b => b.IsConstructing);
+                var playerAfter = await _db.Players.FindAsync(settlement.PlayerId);
+                int queueLimitAfter = playerAfter?.GetBuildQueueLimit() ?? 2;
+
+                return Ok(new
+                {
+                    Message = "Queued upgrade cancelled. 75% resources refunded.",
+                    QueueUsed = activeCountAfter,
+                    QueueLimit = queueLimitAfter,
+                    UsedPopulation = settlement.UsedPopulation,
+                    AvailablePopulation = settlement.AvailablePopulation
+                });
+            }
+
+            // No queued items, attempt to cancel active construction
             if (building == null || !building.IsConstructing)
-                return BadRequest("No active construction for this building type.");
+                return BadRequest("No active construction or queued items for this building type.");
+
+            // If there exist any waiting items for this building with a higher target level, disallow cancelling the active one
+            var anyHigherWaiting = await _db.BuildingUpgradeQueueItems
+                .AnyAsync(q => q.SettlementId == settlement.Id && q.BuildingType == buildingType && !q.IsStarted && q.TargetLevel > building.TargetLevel);
+            if (anyHigherWaiting)
+            {
+                return BadRequest("Cannot cancel active construction while higher queued upgrades exist. Cancel queued upgrades first.");
+            }
 
             var cost = BuildingDefinitions.GetUpgradeCost(buildingType, building.TargetLevel);
             settlement.Resources.Add(
-                water: cost.Water / 2,
-                food: cost.Food / 2,
-                scrap: cost.Scrap / 2,
-                fuel: cost.Fuel / 2,
-                energy: cost.Energy / 2,
-                rareTech: cost.RareTech / 2
+                water: (int)Math.Ceiling(cost.Water * 0.75),
+                food: (int)Math.Ceiling(cost.Food * 0.75),
+                scrap: (int)Math.Ceiling(cost.Scrap * 0.75),
+                fuel: (int)Math.Ceiling(cost.Fuel * 0.75),
+                energy: (int)Math.Ceiling(cost.Energy * 0.75),
+                rareTech: (int)Math.Ceiling(cost.RareTech * 0.75)
             );
 
             building.CancelConstruction();
@@ -469,13 +576,16 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             await _db.SaveChangesAsync();
 
+            // After cancelling active, try to start next waiting items
+            await StartNextQueuedConstructionsInternal(settlement);
+
             var activeCount = settlement.Buildings.Count(b => b.IsConstructing);
             var player = await _db.Players.FindAsync(settlement.PlayerId);
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
 
             return Ok(new
             {
-                Message = "Construction cancelled. 50% resources refunded.",
+                Message = "Active construction cancelled. 75% resources refunded.",
                 QueueUsed = activeCount,
                 QueueLimit = queueLimit,
                 UsedPopulation = settlement.UsedPopulation,
@@ -786,12 +896,65 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             foreach (var item in readyItems)
             {
-                settlement.AddUnits(item.UnitName, item.Quantity, 0);
+                settlement.AddUnits(item.UnitName, item.Quantity, item.PopulationCostPerUnit);
                 item.MarkCompleted();
                 completedCount++;
             }
 
             return completedCount;
+        }
+
+        private async Task StartNextQueuedConstructionsInternal(Settlement settlement)
+        {
+            if (settlement == null) return;
+
+            var player = await _db.Players.FindAsync(settlement.PlayerId);
+            int queueLimit = player?.GetBuildQueueLimit() ?? 2;
+            int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
+
+            if (activeCount >= queueLimit)
+                return;
+
+            var waiting = await _db.BuildingUpgradeQueueItems
+                .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
+                .OrderBy(q => q.CreatedAtUtc)
+                .ToListAsync();
+
+            foreach (var q in waiting)
+            {
+                if (activeCount >= queueLimit)
+                    break;
+
+                // ensure this is the next waiting item for its building (no lower-target waiting remains)
+                bool hasLowerWaiting = waiting.Any(x => x.BuildingType == q.BuildingType && x.TargetLevel < q.TargetLevel && !x.IsStarted);
+                if (hasLowerWaiting)
+                    continue;
+
+                var building = settlement.Buildings.FirstOrDefault(b => b.Type == q.BuildingType);
+                if (building == null)
+                {
+                    int startingLevel = BuildingDefinitions.GetStartingLevel(q.BuildingType);
+                    building = startingLevel > 0
+                        ? Building.CreateAtLevel(settlement.Id, q.BuildingType, startingLevel)
+                        : new Building(settlement.Id, q.BuildingType);
+                    _db.Buildings.Add(building);
+                    settlement.Buildings.Add(building);
+                }
+
+                building.TryCompleteConstruction();
+                if (building.IsConstructing)
+                    continue;
+
+                int buildTime = BuildingDefinitions.GetBuildTimeSeconds(q.BuildingType, q.TargetLevel);
+                building.StartUpgrade(buildTime);
+
+                // remove queue item (we already reserved cost when queued)
+                _db.BuildingUpgradeQueueItems.Remove(q);
+
+                activeCount++;
+            }
+
+            await _db.SaveChangesAsync();
         }
 
         private void EnsureStarterBuildings(Settlement settlement)
