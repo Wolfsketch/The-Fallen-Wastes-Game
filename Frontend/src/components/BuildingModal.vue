@@ -86,7 +86,7 @@
           <span class="queue-info-label">BUILD QUEUE</span>
           <span class="queue-info-value">{{ queueActive }} / {{ queueLimit }}</span>
 
-          <span v-if="isQueueFull" class="queue-info-msg">
+          <span class="queue-info-msg" v-if="isQueueFull">
             — All active slots occupied; new upgrades will be queued.
           </span>
 
@@ -107,9 +107,9 @@
             </div>
           </div>
 
-          <div class="modal-queue-note">
-            Cancel returns 75% resources and removes queued items in reverse order (highest queued level first).
-          </div>
+              <div class="modal-queue-note">
+                Cancel returns ~75% resources (preview shown where available). Cancels remove queued items in reverse order (highest queued level first).
+              </div>
         </div>
 
         <div v-if="upgradeError" class="modal-error">{{ upgradeError }}</div>
@@ -122,6 +122,10 @@
         >
           {{ buttonLabel }}
         </button>
+
+        <div v-if="isQueueFull && canUpgradeNow" style="margin-top:8px; font-size:11px; color:var(--muted);">
+          This upgrade will be placed in the waiting queue when active slots are occupied.
+        </div>
       </div>
     </div>
   </div>
@@ -247,9 +251,14 @@ const buildingQueue = computed(() => (props.queueItems || []).filter(q => q.type
 const buildingActiveQueue = computed(() => buildingQueue.value.filter(q => q.isActive))
 const buildingWaitingQueue = computed(() => buildingQueue.value.filter(q => q.isWaiting))
 
+// Allow queuing even when active slots are full. Only block on real constraints
+// Allow queuing even while the same building is actively constructing. Some backends may
+// set canUpgrade=false for a building while it is constructing; treat an active building
+// as eligible for queuing so players can schedule the next level.
 const canUpgradeNow = computed(() => {
+  const upgradeFlag = props.building.canUpgrade || props.building.isConstructing
   return (
-      props.building.canUpgrade &&
+      upgradeFlag &&
       !props.building.isFutureFeature &&
       props.building.isBuildable !== false &&
       canAfford.value &&
@@ -261,11 +270,13 @@ const buttonLabel = computed(() => {
   if (upgrading.value) return 'PROCESSING...'
   if (props.building.isFutureFeature) return 'FUTURE FEATURE'
   if (props.building.isBuildable === false) return 'NOT AVAILABLE'
-  // Do not block upgrade button when queue is full; waiting entries are allowed.
   if (missingPrerequisites.value.length > 0) return 'REQUIREMENTS NOT MET'
   if (!canAfford.value) return 'INSUFFICIENT RESOURCES'
   if (!props.building.canUpgrade) return 'UPGRADE UNAVAILABLE'
-  // If this building already has an active or waiting queue entry, indicate queuing next
+
+  // If this building already has queued items, suggest queuing the next upgrade
+  // If the player's active slots are full, prefer 'QUEUE NEXT UPGRADE' so intent is clear
+  if (isQueueFull.value) return 'QUEUE NEXT UPGRADE'
   if ((buildingActiveQueue.value.length + buildingWaitingQueue.value.length) > 0) return 'QUEUE NEXT UPGRADE'
   return 'AUTHORIZE UPGRADE'
 })

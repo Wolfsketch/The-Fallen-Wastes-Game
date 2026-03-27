@@ -383,16 +383,20 @@ function normalizeQueueItem(raw) {
   const hintWaiting = raw.isWaiting ?? raw.IsWaiting ?? raw.queuePosition ?? raw.QueuePosition ?? raw.queueIndex ?? raw.QueueIndex
   const hintCompleted = raw.isCompleted ?? raw.IsCompleted ?? raw.completed ?? raw.Completed
 
+  // If the backend explicitly tagged the source (we tag Constructing/Waiting when merging),
+  // prefer that mapping so a Constructing item never renders as WAITING. This acts as a
+  // strong hint/override for ambiguous or inconsistent status fields coming from servers.
   let status = rawStatus
+  if (raw.__queueSource) {
+    if (raw.__queueSource === 'constructing') status = 'active'
+    else if (raw.__queueSource === 'waiting') status = 'waiting'
+  }
+
+  // If status is still undefined, fall back to boolean hints and any textual status.
   if (!status) {
     if (hintActive) status = 'active'
     else if (hintWaiting) status = 'waiting'
     else if (hintCompleted) status = 'completed'
-    // Hard fallback: if backend explicitly tagged the source, respect it
-    else if (raw.__queueSource) {
-      if (raw.__queueSource === 'constructing') status = 'active'
-      else if (raw.__queueSource === 'waiting') status = 'waiting'
-    }
   }
 
   const isActive = status === 'active'
