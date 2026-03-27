@@ -101,12 +101,12 @@
           <div class="cancel-line">Target: L{{ confirmCancel.toLevel ?? confirmCancel.targetLevel }}</div>
           <div class="cancel-line">Status: <em>{{ confirmCancel.isActive ? 'ACTIVE' : (confirmCancel.isWaiting ? 'WAITING' : confirmCancel.status) }}</em></div>
 
-          <div v-if="confirmCancel.cost" class="cancel-refund">
+          <div v-if="refundPreview(confirmCancel.cost)" class="cancel-refund">
             <div class="cancel-refund-title">Refund preview (75%):</div>
             <div class="cancel-refund-list">
-              <div v-for="(v,k) in refundPreview(confirmCancel.cost)" :key="k" class="cancel-refund-item">
-                <span class="refund-label">{{ k.toUpperCase() }}</span>
-                <span class="refund-val">{{ v }}</span>
+              <div v-for="r in refundPreview(confirmCancel.cost)" :key="r.label" class="cancel-refund-item">
+                <span class="refund-label">{{ r.label }}</span>
+                <span class="refund-val">{{ r.amount }}</span>
               </div>
             </div>
           </div>
@@ -115,7 +115,12 @@
             Exact refund preview unavailable for active item.
           </div>
 
-          <div class="cancel-note">Cancelling returns ~75% of resources and removes queued items in reverse order (highest queued level first).</div>
+          <div v-if="confirmCancel.isWaiting" class="cancel-note">
+            Queued upgrade cancelled. Removes queued items in reverse order (highest level first). ~75% resources refunded.
+          </div>
+          <div v-else-if="confirmCancel.isActive" class="cancel-note">
+            Active construction cancelled. ~75% resources refunded.
+          </div>
         </div>
 
         <div class="cancel-actions">
@@ -285,15 +290,25 @@ function closeCancelConfirm() {
   confirmCancel.value = null
 }
 
+const REFUND_KEYS = [
+  { key: 'water',    label: '💧 Water' },
+  { key: 'food',     label: '🌾 Food' },
+  { key: 'scrap',    label: '⚙️ Scrap' },
+  { key: 'fuel',     label: '⛽ Fuel' },
+  { key: 'energy',   label: '⚡ Energy' },
+  { key: 'rareTech', label: '🧬 RareTech' }
+]
+
 function refundPreview(cost) {
-  // cost is expected to be an object like { water: 100, scrap: 50 }
   if (!cost) return null
-  const out = {}
-  for (const k of Object.keys(cost)) {
-    const v = Number(cost[k]) || 0
-    out[k] = Math.ceil(v * 0.75)
+  const out = []
+  for (const { key, label } of REFUND_KEYS) {
+    // Accept both camelCase (water) and PascalCase (Water) from the backend
+    const raw = cost[key] ?? cost[key[0].toUpperCase() + key.slice(1)] ?? 0
+    const v = Number(raw) || 0
+    if (v > 0) out.push({ label, amount: Math.ceil(v * 0.75) })
   }
-  return out
+  return out.length > 0 ? out : null
 }
 
 const ICONS = {
