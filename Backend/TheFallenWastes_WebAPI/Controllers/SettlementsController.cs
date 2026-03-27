@@ -232,19 +232,50 @@ namespace TheFallenWastes_WebAPI.Controllers
                         match = startedQueueItems.FirstOrDefault(q => q.BuildingType == b.Type && q.TargetLevel == b.TargetLevel);
                     }
 
-                    object costObj = null;
-                    object refundPreview = null;
+                    object costObj;
+                    object refundPreview;
                     if (match != null)
                     {
-                        costObj = new { match.CostWater, match.CostFood, match.CostScrap, match.CostFuel, match.CostEnergy, match.CostRareTech };
+                        costObj = new
+                        {
+                            water = match.CostWater,
+                            food = match.CostFood,
+                            scrap = match.CostScrap,
+                            fuel = match.CostFuel,
+                            energy = match.CostEnergy,
+                            rareTech = match.CostRareTech
+                        };
                         refundPreview = new
                         {
-                            Water = (int)Math.Ceiling(match.CostWater * 0.75),
-                            Food = (int)Math.Ceiling(match.CostFood * 0.75),
-                            Scrap = (int)Math.Ceiling(match.CostScrap * 0.75),
-                            Fuel = (int)Math.Ceiling(match.CostFuel * 0.75),
-                            Energy = (int)Math.Ceiling(match.CostEnergy * 0.75),
-                            RareTech = (int)Math.Ceiling(match.CostRareTech * 0.75)
+                            water = (int)Math.Ceiling(match.CostWater * 0.75),
+                            food = (int)Math.Ceiling(match.CostFood * 0.75),
+                            scrap = (int)Math.Ceiling(match.CostScrap * 0.75),
+                            fuel = (int)Math.Ceiling(match.CostFuel * 0.75),
+                            energy = (int)Math.Ceiling(match.CostEnergy * 0.75),
+                            rareTech = (int)Math.Ceiling(match.CostRareTech * 0.75)
+                        };
+                    }
+                    else
+                    {
+                        // Fallback: calculate approximate cost using building definitions
+                        var cost = BuildingDefinitions.GetUpgradeCost(b.Type, b.TargetLevel);
+                        costObj = new
+                        {
+                            water = cost.Water,
+                            food = cost.Food,
+                            scrap = cost.Scrap,
+                            fuel = cost.Fuel,
+                            energy = cost.Energy,
+                            rareTech = cost.RareTech
+                        };
+                        refundPreview = new
+                        {
+                            water = (int)Math.Ceiling(cost.Water * 0.75),
+                            food = (int)Math.Ceiling(cost.Food * 0.75),
+                            scrap = (int)Math.Ceiling(cost.Scrap * 0.75),
+                            fuel = (int)Math.Ceiling(cost.Fuel * 0.75),
+                            energy = (int)Math.Ceiling(cost.Energy * 0.75),
+                            rareTech = (int)Math.Ceiling(cost.RareTech * 0.75)
                         };
                     }
 
@@ -274,7 +305,15 @@ namespace TheFallenWastes_WebAPI.Controllers
                     DisplayName = BuildingDefinitions.GetDisplayName(q.BuildingType),
                     q.TargetLevel,
                     q.CreatedAtUtc,
-                    Cost = new { q.CostWater, q.CostFood, q.CostScrap, q.CostFuel, q.CostEnergy, q.CostRareTech }
+                    Cost = new
+                    {
+                        water = q.CostWater,
+                        food = q.CostFood,
+                        scrap = q.CostScrap,
+                        fuel = q.CostFuel,
+                        energy = q.CostEnergy,
+                        rareTech = q.CostRareTech
+                    }
                 })
                 .ToListAsync();
 
