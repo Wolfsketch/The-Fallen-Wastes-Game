@@ -156,9 +156,10 @@
         <div v-for="op in activeOperationMarkers" :key="'timer-' + op.id"
              class="op-timer"
              :style="{ left: op.x + 'px', top: (op.y - 24) + 'px' }">
-          {{ formatTravelTime(Math.max(0, Math.ceil(
-              (new Date(op.arrivesAtUtc ?? 0).getTime() - Date.now()) / 1000
-          ))) }}
+          {{ op.phase === 'returning' && op.returnsAtUtc
+            ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.returnsAtUtc).getTime() - Date.now()) / 1000)))
+            : formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc ?? 0).getTime() - Date.now()) / 1000)))
+          }}
         </div>
       </div>
       <div class="minimap">
@@ -627,10 +628,8 @@ const ownArrivedAtSelectedPoi = computed(() => {
 
 const selectedPoiScoutResult = computed(() => {
   if (!selPoi.value) return null
-  const scoutOp = operations.value.find(op =>
-    op.operationType === 'scout_poi' &&
-    op.poiId === selPoi.value.id &&
-    op.resultJson
+  const scoutOp = scoutResultOps.value.find(op =>
+    op.poiId === selPoi.value.id
   )
   if (!scoutOp) return null
   try { return JSON.parse(scoutOp.resultJson) }
@@ -640,16 +639,31 @@ const selectedPoiScoutResult = computed(() => {
 // Stippen enkel voor eigen + alliantie — neutrale/vijand volledig verborgen
 const activeOperationMarkers = computed(() => {
   const now = frameTime.value
-  return operations.value
-      .filter(op => op.phase === 'outbound' && (op.isOwn || op.isAlliance))
-      .map(op => {
-        const progress = Math.min(1, (now - op.startTime) / op.travelDuration)
-        return {
-          ...op,
-          x: op.originX + (op.destX - op.originX) * progress,
-          y: op.originY + (op.destY - op.originY) * progress,
-        }
-      })
+  const outbound = operations.value
+    .filter(op => op.phase === 'outbound' && (op.isOwn || op.isAlliance))
+    .map(op => {
+      const progress = Math.min(1, (now - op.startTime) / op.travelDuration)
+      return {
+        ...op,
+        x: op.originX + (op.destX - op.originX) * progress,
+        y: op.originY + (op.destY - op.originY) * progress,
+      }
+    })
+
+  const returning = operations.value
+    .filter(op => op.phase === 'returning' && op.isOwn && op.returnsAtUtc)
+    .map(op => {
+      const totalReturn = new Date(op.returnsAtUtc).getTime() - new Date(op.arrivesAtUtc).getTime()
+      const elapsed = now - new Date(op.arrivesAtUtc).getTime()
+      const progress = totalReturn > 0 ? Math.min(1, elapsed / totalReturn) : 1
+      return {
+        ...op,
+        x: op.destX + (op.originX - op.destX) * progress,
+        y: op.destY + (op.originY - op.destY) * progress,
+      }
+    })
+
+  return [...outbound, ...returning]
 })
 
 // Alliantieleden aanwezig in POI — zichtbaar in panel met naam + troepen
@@ -821,6 +835,18 @@ function confirmRaid() { /* replaced — see confirmAttack */ }
 async function loadOperations() {
   if (!props.settlement?.id) return
   try {
+    // Aggressive cleanup: drop stale ops older than 2x their travel time
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+      const alive = stored.filter(o => {
+        const age = Date.now() - o.startTime
+        return age < o.travelDuration * 2
+      })
+      if (alive.length !== stored.length) {
+        sessionStorage.setItem('localOps', JSON.stringify(alive))
+      }
+    } catch {}
+
     // Restore local ops from sessionStorage if still traveling
     try {
       const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
@@ -873,6 +899,7 @@ async function loadOperations() {
       lootItemsEarned: op.lootItemsEarned ?? op.LootItemsEarned ?? 0,
       lootIntervalSeconds: op.lootIntervalSeconds ?? op.LootIntervalSeconds ?? 300,
       poiLabel: op.targetPoiLabel ?? op.TargetPoiLabel ?? op.targetPoiId ?? null,
+      returnsAtUtc: op.returnsAtUtc ?? op.ReturnsAtUtc ?? null,
     }))
 
     // Keep currently-animating outbound ops not yet in the new data
@@ -1079,7 +1106,18 @@ const activeOperations = computed(() =>
   operations.value.filter(op =>
     op.isOwn &&
     op.phase !== 'completed' &&
-    !String(op.id).startsWith('local-')
+    !String(op.id).startsWith('local-') &&
+    // Exclude arrived scout_poi ops — they are done,
+    // only kept in 24h window for selectedPoiScoutResult
+    !(op.operationType === 'scout_poi' && op.phase === 'arrived')
+  )
+)
+
+const scoutResultOps = computed(() =>
+  operations.value.filter(op =>
+    op.operationType === 'scout_poi' &&
+    (op.phase === 'arrived' || op.phase === 'returning' || op.phase === 'completed') &&
+    op.resultJson
   )
 )
 

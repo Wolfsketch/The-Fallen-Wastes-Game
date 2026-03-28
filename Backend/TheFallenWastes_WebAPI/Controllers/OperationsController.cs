@@ -282,8 +282,13 @@ namespace TheFallenWastes_WebAPI.Controllers
                     }
 
                     op.MarkArrived();
-                    // Do NOT complete here — leave as "arrived" so the frontend
-                    // can read the result on the next poll and show the scout report.
+                    // Scout: immediately start returning so it doesn't clutter movements panel.
+                    // Frontend reads resultJson from the 24h window filter.
+                    if (op.OperationType == "scout_poi")
+                    {
+                        int returnSeconds = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
+                        op.MarkReturning(returnSeconds);
+                    }
                 }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                     op.MarkCompleted(op.ResultJson ?? "{}");
