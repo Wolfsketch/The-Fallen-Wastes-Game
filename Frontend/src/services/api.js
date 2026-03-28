@@ -399,4 +399,11 @@ export async function deleteForumTopic(allianceId, topicId, playerId) {
     return response.data
 }
 
+export async function setAllianceMemberPermissions(allianceId, targetPlayerId, requesterId, permissions) {
+    const response = await api.patch(`/alliances/${allianceId}/members/${targetPlayerId}/permissions`, {
+        requesterId, ...permissions
+    })
+    return response.data
+}
+
 export default api

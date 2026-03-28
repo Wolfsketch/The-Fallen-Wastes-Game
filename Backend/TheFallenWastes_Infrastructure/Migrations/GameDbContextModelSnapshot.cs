@@ -172,6 +172,21 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<Guid>("AllianceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("CanBroadcast")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CanInvite")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CanManageRecruitment")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CanManageReservations")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsForumModerator")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("JoinedAtUtc")
                         .HasColumnType("datetime2");
 

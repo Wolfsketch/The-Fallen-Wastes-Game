@@ -180,6 +180,7 @@
           <thead>
             <tr>
               <th>RANK</th><th>PLAYER</th><th>SCORE</th><th>SETTLEMENTS</th><th>JOINED</th>
+              <th v-if="myRank <= 1">PERMISSIONS</th>
               <th v-if="myRank <= 2"></th>
             </tr>
           </thead>
@@ -198,6 +199,25 @@
               <td class="al-score-cell">{{ m.score?.toLocaleString() }}</td>
               <td>{{ m.settlementCount }}</td>
               <td class="al-muted al-date-cell">{{ formatDate(m.joinedAtUtc) }}</td>
+              <td v-if="myRank <= 1" class="al-perm-cell">
+                <div class="al-perm-icons">
+                  <template v-for="p in PERMISSIONS" :key="p.key">
+                    <span v-if="getRankValue(m.rank) <= 2"
+                          class="al-perm-icon al-perm-icon--locked"
+                          :title="p.label + ': granted by rank'">
+                      {{ p.icon }}
+                    </span>
+                    <button v-else
+                            type="button"
+                            class="al-perm-icon"
+                            :class="{ 'al-perm-icon--on': m[p.key] }"
+                            :title="p.label + ': ' + (m[p.key] ? 'revoke' : 'grant')"
+                            @click="doTogglePermission(m, p.key)">
+                      {{ p.icon }}
+                    </button>
+                  </template>
+                </div>
+              </td>
               <td v-if="myRank <= 2">
                 <div class="al-member-actions" v-if="m.playerId !== player?.id && getRankValue(m.rank) > myRank">
                   <select class="al-select al-select--sm" @change="e => doSetRank(m, e.target.value)"
@@ -299,7 +319,13 @@
             </div>
             <div class="al-form-row">
               <label class="al-label">MIN SCORE</label>
-              <input v-model.number="settingsForm.minPoints" type="number" min="0" class="al-input al-input--sm" />
+              <div class="al-num-wrap">
+                <input v-model.number="settingsForm.minPoints" type="number" min="0" class="al-input al-num-input" />
+                <div class="al-num-btn-group">
+                  <button type="button" class="al-num-btn" @click="settingsForm.minPoints = (settingsForm.minPoints || 0) + 1">▲</button>
+                  <button type="button" class="al-num-btn" @click="settingsForm.minPoints = Math.max(0, (settingsForm.minPoints || 0) - 1)">▼</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -351,22 +377,22 @@
               <div class="al-editor">
                 <div class="al-editor-toolbar">
                   <button type="button" class="al-editor-btn" title="Bold"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[b]', '[/b]')"><b>B</b></button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[b]', '[/b]')"><b>B</b></button>
                   <button type="button" class="al-editor-btn al-editor-btn--i" title="Italic"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[i]', '[/i]')"><i>I</i></button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[i]', '[/i]')"><i>I</i></button>
                   <button type="button" class="al-editor-btn al-editor-btn--u" title="Underline"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[u]', '[/u]')">U</button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[u]', '[/u]')">U</button>
                   <button type="button" class="al-editor-btn al-editor-btn--s" title="Strikethrough"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[s]', '[/s]')"><s>S</s></button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[s]', '[/s]')"><s>S</s></button>
                   <span class="al-editor-sep"></span>
                   <button type="button" class="al-editor-btn" title="Inline code"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[code]', '[/code]')">{ }</button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[code]', '[/code]')">{ }</button>
                   <button type="button" class="al-editor-btn" title="Code block"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[pre]', '[/pre]')">&lt;/&gt;</button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[pre]', '[/pre]')">&lt;/&gt;</button>
                   <button type="button" class="al-editor-btn" title="Quote"
-                          @click="insertFormat(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v, '[quote]', '[/quote]')">❝</button>
+                          @mousedown.prevent="insertFormat(newTopicEditorRef, '[quote]', '[/quote]')">❝</button>
                   <button type="button" class="al-editor-btn" title="Bullet list"
-                          @click="insertListItem(newTopicEditorRef, () => newTopicForm.content, v => newTopicForm.content = v)">• List</button>
+                          @mousedown.prevent="insertListItem(newTopicEditorRef)">• List</button>
                 </div>
                 <textarea ref="newTopicEditorRef" v-model="newTopicForm.content" class="al-textarea" rows="5"
                           placeholder="Write your opening message..."></textarea>
@@ -399,7 +425,7 @@
                 <td>{{ t.replyCount }}</td>
                 <td class="al-muted al-date-cell">{{ t.lastPostAt ? formatDate(t.lastPostAt) : formatDate(t.createdAtUtc) }}</td>
                 <td class="al-forum-actions" @click.stop>
-                  <button v-if="t.authorPlayerId === player?.id || myRank <= 2"
+                  <button v-if="t.authorPlayerId === player?.id || myPermissions.isForumModerator"
                           class="al-post-delete" title="Delete topic"
                           @click="doDeleteTopicFromList(t)">✕</button>
                 </td>
@@ -428,7 +454,7 @@
                 <span class="al-post-author">{{ post.authorName }}</span>
                 <span class="al-post-time">{{ formatDate(post.createdAtUtc) }}</span>
                 <span v-if="post.editedAtUtc" class="al-post-edited">(edited)</span>
-                <button v-if="post.authorId === player?.id || myRank <= 2"
+                <button v-if="post.authorId === player?.id || myPermissions.isForumModerator"
                         class="al-post-delete" @click="doDeletePost(post)">✕</button>
               </div>
               <div class="al-post-content" v-html="renderContent(post.content)"></div>
@@ -440,22 +466,22 @@
             <div class="al-editor">
               <div class="al-editor-toolbar">
                 <button type="button" class="al-editor-btn" title="Bold"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[b]', '[/b]')"><b>B</b></button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[b]', '[/b]')"><b>B</b></button>
                 <button type="button" class="al-editor-btn al-editor-btn--i" title="Italic"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[i]', '[/i]')"><i>I</i></button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[i]', '[/i]')"><i>I</i></button>
                 <button type="button" class="al-editor-btn al-editor-btn--u" title="Underline"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[u]', '[/u]')">U</button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[u]', '[/u]')">U</button>
                 <button type="button" class="al-editor-btn al-editor-btn--s" title="Strikethrough"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[s]', '[/s]')"><s>S</s></button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[s]', '[/s]')"><s>S</s></button>
                 <span class="al-editor-sep"></span>
                 <button type="button" class="al-editor-btn" title="Inline code"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[code]', '[/code]')">{ }</button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[code]', '[/code]')">{ }</button>
                 <button type="button" class="al-editor-btn" title="Code block"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[pre]', '[/pre]')">&lt;/&gt;</button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[pre]', '[/pre]')">&lt;/&gt;</button>
                 <button type="button" class="al-editor-btn" title="Quote"
-                        @click="insertFormat(replyEditorRef, () => replyContent, v => replyContent = v, '[quote]', '[/quote]')">❝</button>
+                        @mousedown.prevent="insertFormat(replyEditorRef, '[quote]', '[/quote]')">❝</button>
                 <button type="button" class="al-editor-btn" title="Bullet list"
-                        @click="insertListItem(replyEditorRef, () => replyContent, v => replyContent = v)">• List</button>
+                        @mousedown.prevent="insertListItem(replyEditorRef)">• List</button>
               </div>
               <textarea ref="replyEditorRef" v-model="replyContent" class="al-textarea" rows="4"
                         placeholder="Write your reply..."></textarea>
@@ -541,6 +567,7 @@ import {
   getPlayerInvitations, kickAllianceMember, leaveAlliance, dissolveAlliance,
   updateAllianceSettings, setAllianceMemberRank,
   getAllianceForumTopics, createForumTopic, getForumTopic, addForumPost, deleteForumPost, deleteForumTopic,
+  setAllianceMemberPermissions,
   searchPlayers as searchPlayersApi
 } from '../services/api'
 
@@ -579,6 +606,19 @@ const myRankEntry = computed(() =>
   members.value.find(m => m.playerId === player.value?.id)
 )
 const myRank = computed(() => getRankValue(myRankEntry.value?.rank ?? 'Member'))
+
+const myPermissions = computed(() => {
+  const r = myRank.value
+  if (r <= 2) return { canInvite: true, canManageRecruitment: true, isForumModerator: true, canBroadcast: true, canManageReservations: true }
+  const e = myRankEntry.value
+  return {
+    canInvite:             e?.canInvite ?? false,
+    canManageRecruitment:  e?.canManageRecruitment ?? false,
+    isForumModerator:      e?.isForumModerator ?? false,
+    canBroadcast:          e?.canBroadcast ?? false,
+    canManageReservations: e?.canManageReservations ?? false,
+  }
+})
 
 const pendingAppsCount = computed(() => pendingApplications.value.length)
 
@@ -648,6 +688,14 @@ const newTopicEditorRef = ref(null)
 // ─── Helpers ─────────────────────────────────────────────
 const RANK_NAMES  = ['Founder', 'Leader', 'Officer', 'Member']
 const STATUS_NAMES = ['Open', 'ApplicationRequired', 'Closed']
+
+const PERMISSIONS = [
+  { key: 'canInvite',             icon: '✉', label: 'Can Invite' },
+  { key: 'canManageRecruitment',  icon: '◎', label: 'Manage Applications' },
+  { key: 'canBroadcast',          icon: '📢', label: 'Can Broadcast' },
+  { key: 'isForumModerator',      icon: '✎', label: 'Forum Moderator' },
+  { key: 'canManageReservations', icon: '◈', label: 'Manage Reservations' },
+]
 
 function rankToString(rank) {
   if (typeof rank === 'number') return RANK_NAMES[rank] ?? 'Member'
@@ -1000,33 +1048,49 @@ async function doDeleteTopicFromList(t) {
   } catch (e) { console.error(e) }
 }
 
+async function doTogglePermission(m, permKey) {
+  if (myRank.value > 1) return
+  const perms = {
+    canInvite:             m.canInvite ?? false,
+    canManageRecruitment:  m.canManageRecruitment ?? false,
+    isForumModerator:      m.isForumModerator ?? false,
+    canBroadcast:          m.canBroadcast ?? false,
+    canManageReservations: m.canManageReservations ?? false,
+  }
+  perms[permKey] = !perms[permKey]
+  try {
+    await setAllianceMemberPermissions(myAlliance.value.id, m.playerId, player.value.id, perms)
+    m[permKey] = perms[permKey]
+  } catch (e) { console.error('Failed to update permission', e) }
+}
+
 // ─── Rich text editor helpers ─────────────────────────────
-function insertFormat(textareaRef, getter, setter, open, close) {
+function insertFormat(textareaRef, open, close) {
   const el = textareaRef.value
   if (!el) return
   const start = el.selectionStart
   const end   = el.selectionEnd
-  const val   = getter() ?? ''
+  const val   = el.value
   const sel   = val.substring(start, end)
-  setter(val.substring(0, start) + open + sel + close + val.substring(end))
+  el.value = val.substring(0, start) + open + sel + close + val.substring(end)
+  el.dispatchEvent(new Event('input'))
   nextTick(() => {
     el.focus()
-    const cursor = start + open.length
-    el.setSelectionRange(cursor, cursor + sel.length)
+    el.setSelectionRange(start + open.length, start + open.length + sel.length)
   })
 }
 
-function insertListItem(textareaRef, getter, setter) {
+function insertListItem(textareaRef) {
   const el = textareaRef.value
   if (!el) return
-  const pos  = el.selectionStart
-  const val  = getter() ?? ''
+  const pos = el.selectionStart
+  const val = el.value
   const lineStart = val.lastIndexOf('\n', pos - 1) + 1
-  setter(val.substring(0, lineStart) + '• ' + val.substring(lineStart))
+  el.value = val.substring(0, lineStart) + '• ' + val.substring(lineStart)
+  el.dispatchEvent(new Event('input'))
   nextTick(() => {
     el.focus()
-    const newPos = pos + 2
-    el.setSelectionRange(newPos, newPos)
+    el.setSelectionRange(pos + 2, pos + 2)
   })
 }
 
@@ -1360,7 +1424,34 @@ onMounted(loadData)
   transition: border-color 0.15s;
 }
 .al-input:focus { border-color: var(--cyan-dim); }
+.al-input[type=number] { -moz-appearance: textfield; }
+.al-input[type=number]::-webkit-outer-spin-button,
+.al-input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .al-input--sm { max-width: 120px; }
+
+/* ── Custom number input ─────────────────────── */
+.al-num-wrap { display: inline-flex; align-items: stretch; }
+.al-num-input { max-width: 80px; border-right: none !important; }
+.al-num-btn-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-bright);
+  border-left: none;
+}
+.al-num-btn {
+  background: var(--bg3);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 7px;
+  font-size: 7px;
+  line-height: 1;
+  flex: 1;
+  transition: all 0.12s;
+  min-width: 22px;
+}
+.al-num-btn:first-child { border-bottom: 1px solid var(--border-bright); }
+.al-num-btn:hover { background: var(--bg); color: var(--cyan); }
 
 .al-textarea {
   background: var(--bg3);
@@ -1731,6 +1822,38 @@ onMounted(loadData)
 
 /* ── Forum topic actions column ───────────────── */
 .al-forum-actions { width: 36px; text-align: right; padding-right: 6px; }
+
+/* ── Member permission toggles ────────────────── */
+.al-perm-cell { padding: 6px 8px; }
+.al-perm-icons { display: flex; gap: 3px; align-items: center; }
+.al-perm-icon {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0;
+  line-height: 1;
+}
+.al-perm-icon:hover { border-color: var(--cyan-dim); color: var(--cyan); background: rgba(0,212,255,0.06); }
+.al-perm-icon--on { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.1); }
+.al-perm-icon--locked {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--cyan);
+  opacity: 0.5;
+  cursor: default;
+}
 
 .al-reply-box { display: flex; flex-direction: column; gap: 10px; }
 

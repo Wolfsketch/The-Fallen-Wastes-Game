@@ -27,9 +27,24 @@ namespace TheFallenWastes_Domain.Entities
             JoinedAtUtc = DateTime.UtcNow;
         }
 
+        public bool CanInvite { get; private set; }
+        public bool CanManageRecruitment { get; private set; }
+        public bool IsForumModerator { get; private set; }
+        public bool CanBroadcast { get; private set; }
+        public bool CanManageReservations { get; private set; }
+
         public void SetRank(AllianceMemberRank rank)
         {
             Rank = rank;
+        }
+
+        public void SetPermissions(bool canInvite, bool canManageRecruitment, bool isForumModerator, bool canBroadcast, bool canManageReservations)
+        {
+            CanInvite = canInvite;
+            CanManageRecruitment = canManageRecruitment;
+            IsForumModerator = isForumModerator;
+            CanBroadcast = canBroadcast;
+            CanManageReservations = canManageReservations;
         }
     }
 }

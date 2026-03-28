@@ -199,7 +199,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             var reqMember = await _context.AllianceMembers
                 .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == request.RequesterId);
-            if (reqMember == null || reqMember.Rank > AllianceMemberRank.Officer) return Forbid();
+            if (reqMember == null || (reqMember.Rank > AllianceMemberRank.Officer && !reqMember.CanInvite)) return Forbid();
 
             var target = await _context.Players.FirstOrDefaultAsync(p => p.Id == request.TargetPlayerId);
             if (target == null) return NotFound("Target player not found.");
@@ -239,7 +239,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             var reqMember = await _context.AllianceMembers
                 .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == request.RequesterId);
-            if (reqMember == null || reqMember.Rank > AllianceMemberRank.Officer) return Forbid();
+            if (reqMember == null || (reqMember.Rank > AllianceMemberRank.Officer && !reqMember.CanManageRecruitment)) return Forbid();
 
             var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == app.PlayerId);
             if (player == null) return NotFound("Player not found.");
@@ -604,7 +604,7 @@ namespace TheFallenWastes_WebAPI.Controllers
             var member = await _context.AllianceMembers
                 .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == request.PlayerId);
             if (member == null) return Forbid();
-            if (post.AuthorPlayerId != request.PlayerId && member.Rank > AllianceMemberRank.Officer) return Forbid();
+            if (post.AuthorPlayerId != request.PlayerId && member.Rank > AllianceMemberRank.Officer && !member.IsForumModerator) return Forbid();
 
             _context.AllianceForumPosts.Remove(post);
             await _context.SaveChangesAsync();
@@ -621,13 +621,32 @@ namespace TheFallenWastes_WebAPI.Controllers
             var member = await _context.AllianceMembers
                 .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == request.PlayerId);
             if (member == null) return Forbid();
-            if (topic.AuthorPlayerId != request.PlayerId && member.Rank > AllianceMemberRank.Officer) return Forbid();
+            if (topic.AuthorPlayerId != request.PlayerId && member.Rank > AllianceMemberRank.Officer && !member.IsForumModerator) return Forbid();
 
             _context.AllianceForumTopics.Remove(topic);
             await _context.SaveChangesAsync();
             return Ok(new { Message = "Topic deleted." });
         }
-    }
+        // ════════════════════════════════════════════════════════
+        // PATCH /api/alliances/{id}/members/{memberId}/permissions
+        // ════════════════════════════════════════════════════════
+        [HttpPatch("{id}/members/{memberId}/permissions")]
+        public async Task<IActionResult> SetMemberPermissions(Guid id, Guid memberId, [FromBody] SetMemberPermissionsRequest request)
+        {
+            var reqMember = await _context.AllianceMembers
+                .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == request.RequesterId);
+            if (reqMember == null || reqMember.Rank > AllianceMemberRank.Leader) return Forbid();
+
+            var target = await _context.AllianceMembers
+                .FirstOrDefaultAsync(m => m.AllianceId == id && m.PlayerId == memberId);
+            if (target == null) return NotFound();
+            if (target.Rank <= AllianceMemberRank.Officer)
+                return BadRequest("Officers and above have full permissions by rank.");
+
+            target.SetPermissions(request.CanInvite, request.CanManageRecruitment, request.IsForumModerator, request.CanBroadcast, request.CanManageReservations);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }    }
 
     // ═══════════════════════════════
     // Request DTOs
@@ -644,4 +663,5 @@ namespace TheFallenWastes_WebAPI.Controllers
     public record SetRankRequest(Guid RequesterId, AllianceMemberRank Rank);
     public record CreateForumTopicRequest(Guid AuthorPlayerId, string Title, string? Content);
     public record AddForumPostRequest(Guid AuthorPlayerId, string Content);
+    public record SetMemberPermissionsRequest(Guid RequesterId, bool CanInvite, bool CanManageRecruitment, bool IsForumModerator, bool CanBroadcast, bool CanManageReservations);
 }
