@@ -20,7 +20,9 @@ namespace TheFallenWastes_WebAPI.Controllers
         public async Task<IActionResult> GetInbox(Guid playerId)
         {
             var messages = await _db.Messages
-                .Where(m => m.ReceiverPlayerId == playerId)
+                .Where(m => m.ReceiverPlayerId == playerId
+                         && m.MessageType != "report"
+                         && m.MessageType != "notification")
                 .OrderByDescending(m => m.SentAtUtc)
                 .ToListAsync();
 
@@ -44,7 +46,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                 m.Subject,
                 m.Body,
                 m.SentAtUtc,
-                m.IsRead
+                m.IsRead,
+                MessageType = m.MessageType ?? "message"
             });
 
             return Ok(result);

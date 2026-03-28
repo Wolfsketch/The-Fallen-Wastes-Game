@@ -186,12 +186,42 @@ namespace TheFallenWastes_WebAPI.Controllers
                         TravelSeconds = (int)(o.ArrivesAtUtc - o.StartedAtUtc).TotalSeconds,
                         RemainingSeconds = (int)remainingSeconds,
                         IsOwn = o.AttackerSettlementId == settlementId,
-                        o.ResultJson
+                        o.ResultJson,
+                        LootItemsEarned = o.OperationType == "raid_poi"
+                            ? o.CalculateLootItemsEarned(now) : 0,
+                        o.LootIntervalSeconds
                     };
                 })
                 .ToList();
 
             return Ok(result);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // POST /api/Operations/settlement/{settlementId}/recall/{operationId}
+        // ═══════════════════════════════════════════════════════════════════
+        [HttpPost("settlement/{settlementId}/recall/{operationId}")]
+        public async Task<IActionResult> RecallOperation(Guid settlementId, Guid operationId)
+        {
+            var operation = await _db.Operations
+                .FirstOrDefaultAsync(o => o.Id == operationId
+                    && o.AttackerSettlementId == settlementId
+                    && o.Phase == "arrived");
+            if (operation == null)
+                return NotFound("No active arrived operation found.");
+
+            int lootEarned = operation.CalculateLootItemsEarned(DateTime.UtcNow);
+            operation.SetLootCollected(lootEarned);
+            int returnSeconds = (int)(operation.ArrivesAtUtc - operation.StartedAtUtc).TotalSeconds;
+            operation.MarkReturning(returnSeconds);
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                lootEarned,
+                returnsAtUtc = operation.ReturnsAtUtc,
+                message = $"Troops recalled. {lootEarned} loot item(s) collected."
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════════

@@ -262,7 +262,12 @@ async function emitUnreadRefresh() {
 async function loadInbox() {
   try {
     const playerId = sessionStorage.getItem('playerId')
-    inboxMessages.value = await getInboxMessages(playerId)
+    const raw = await getInboxMessages(playerId)
+    inboxMessages.value = (raw ?? []).map(m => ({
+      ...m,
+      id: m.id ?? m.Id,
+      messageType: m.messageType ?? m.MessageType ?? 'message'
+    }))
   } catch (err) {
     console.error('Failed to load inbox messages', err)
   }
@@ -271,7 +276,12 @@ async function loadInbox() {
 async function loadSent() {
   try {
     const playerId = sessionStorage.getItem('playerId')
-    sentMessages.value = await getSentMessages(playerId)
+    const rawSent = await getSentMessages(playerId)
+    sentMessages.value = (rawSent ?? []).map(m => ({
+      ...m,
+      id: m.id ?? m.Id,
+      messageType: m.messageType ?? m.MessageType ?? 'message'
+    }))
   } catch (err) {
     console.error('Failed to load sent messages', err)
   }
@@ -281,7 +291,12 @@ async function loadReports() {
   try {
     const playerId = sessionStorage.getItem('playerId')
     if (!playerId) { reportMessages.value = []; return }
-    reportMessages.value = await getReportMessages(playerId) ?? []
+    const rawReports = await getReportMessages(playerId)
+    reportMessages.value = (rawReports ?? []).map(m => ({
+      ...m,
+      id: m.id ?? m.Id,
+      messageType: m.messageType ?? m.MessageType ?? 'report'
+    }))
   } catch {
     reportMessages.value = []
   }
@@ -297,6 +312,7 @@ async function deleteCurrentMessage() {
   const playerId = sessionStorage.getItem('playerId')
   if (!playerId) return
   try {
+    console.log('Deleting message id:', selectedMessage.value.id, 'raw:', selectedMessage.value)
     await deleteMessage(selectedMessage.value.id, playerId)
     inboxMessages.value = inboxMessages.value.filter(m => m.id !== selectedMessage.value.id)
     sentMessages.value = sentMessages.value.filter(m => m.id !== selectedMessage.value.id)

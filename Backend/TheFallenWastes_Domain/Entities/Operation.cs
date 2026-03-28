@@ -33,6 +33,9 @@ namespace TheFallenWastes_Domain.Entities
         // Result stored after arrival resolution
         public string? ResultJson { get; private set; }
 
+        public int LootIntervalSeconds { get; private set; }
+        public int LootItemsCollected { get; private set; }
+
         private Operation() { }
 
         public Operation(
@@ -61,6 +64,11 @@ namespace TheFallenWastes_Domain.Entities
             ReturnsAtUtc = null;
             CompletedAtUtc = null;
             ResultJson = null;
+            LootIntervalSeconds = raidMode switch
+            {
+                "sweep" => 300, "extraction" => 300, "deep" => 300, _ => 300
+            };
+            LootItemsCollected = 0;
         }
 
         public void MarkArrived() { Phase = "arrived"; }
@@ -76,5 +84,17 @@ namespace TheFallenWastes_Domain.Entities
             ResultJson = resultJson;
         }
         public void SetResult(string resultJson) { ResultJson = resultJson; }
+
+        public int CalculateLootItemsEarned(DateTime asOfUtc)
+        {
+            if (Phase != "arrived" && Phase != "returning" && Phase != "completed")
+                return LootItemsCollected;
+            var arrivedAt = ArrivesAtUtc;
+            var elapsed = (asOfUtc - arrivedAt).TotalSeconds;
+            if (elapsed <= 0) return 0;
+            return (int)Math.Floor(elapsed / Math.Max(1, LootIntervalSeconds));
+        }
+
+        public void SetLootCollected(int count) { LootItemsCollected = count; }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TheFallenWastes_Infrastructure;
 
@@ -11,9 +12,11 @@ using TheFallenWastes_Infrastructure;
 namespace TheFallenWastes_Infrastructure.Migrations
 {
     [DbContext(typeof(GameDbContext))]
-    partial class GameDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328113058_AddOperationPoiLabel")]
+    partial class AddOperationPoiLabel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -167,12 +170,6 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("LootIntervalSeconds")
-                        .HasColumnType("int");
-
-                    b.Property<int>("LootItemsCollected")
-                        .HasColumnType("int");
-
                     b.Property<string>("OperationType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -304,30 +301,6 @@ namespace TheFallenWastes_Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("PlayerRelations");
-                });
-
-            modelBuilder.Entity("TheFallenWastes_Domain.Entities.PoiState", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("ClearedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsCleared")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("NextRespawnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PoiId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PoiStates");
                 });
 
             modelBuilder.Entity("TheFallenWastes_Domain.Entities.Research", b =>
