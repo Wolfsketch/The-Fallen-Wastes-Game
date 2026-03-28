@@ -272,7 +272,10 @@
                 </div>
               </div>
               <div class="modal-hint">Total selected: {{ Object.values(attackModal.selectedUnits).reduce((s, v) => s + (v || 0), 0) }}</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:4px">⏱ Estimated travel: {{ formatTravelTime(estimatedTravelSeconds) }}</div>
+              <div class="modal-vault-info" style="margin-top:8px">
+                <span class="modal-label">TRAVEL TIME</span>
+                <span class="modal-value">{{ formatTravelTime(estimatedTravelSeconds) }}</span>
+              </div>
             </div>
             <div v-if="attackModal.error" class="modal-error-msg">{{ attackModal.error }}</div>
           </div>
@@ -367,6 +370,7 @@ const raidModes = [
 
 const scoutError = ref('')
 const scoutReport = ref(null)
+const shownReportIds = new Set()
 const attackModal = ref({
   open: false, type: 'poi', raidMode: 'quick',
   selectedUnits: {}, error: '', isReinforce: false
@@ -460,7 +464,7 @@ async function loadOperations() {
   if (!props.settlement?.id) return
   try {
     const data = await getSettlementOperations(props.settlement.id)
-    operations.value = (data || []).map(op => ({
+    const newOps = (data || []).map(op => ({
       id: op.id,
       phase: op.phase,
       operationType: op.operationType,
@@ -482,6 +486,14 @@ async function loadOperations() {
       isReinforcement: op.operationType === 'reinforce_poi',
       resultJson: op.resultJson ?? null,
     }))
+
+    // Keep currently-animating outbound ops not yet in the new data
+    const existingOutbound = operations.value.filter(op =>
+      op.phase === 'outbound' &&
+      !newOps.some(n => n.id === op.id)
+    )
+
+    operations.value = [...newOps, ...existingOutbound]
     operations.value.forEach(op => {
       const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
       if (ownSlot && op.isOwn) { op.originX = ownSlot.x; op.originY = ownSlot.y }
@@ -494,10 +506,12 @@ async function loadOperations() {
       }
     })
     operations.value.forEach(op => {
-      if (op.operationType === 'scout_poi' && op.phase === 'arrived' && op.resultJson) {
+      if (op.operationType === 'scout_poi' && op.phase === 'arrived' && op.resultJson
+          && !shownReportIds.has(op.id)) {
+        shownReportIds.add(op.id)
         try {
           const result = JSON.parse(op.resultJson)
-          if (result?.npcUnits && !scoutReport.value) {
+          if (result?.npcUnits) {
             scoutReport.value = {
               poiId: op.poiId,
               npcUnits: result.npcUnits,
@@ -817,7 +831,7 @@ onMounted(async () => {
   else {
     // Load real operations from backend and poll every 15 s
     await loadOperations()
-    setInterval(loadOperations, 15000)
+    setInterval(loadOperations, 5000)
   }
 
   frameInterval = setInterval(() => {

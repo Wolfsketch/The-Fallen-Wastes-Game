@@ -73,16 +73,19 @@ namespace TheFallenWastes_WebAPI.Controllers
                         // Send report message to attacker player on arrival
                         if (settlementToPlayer.TryGetValue(op.AttackerSettlementId, out var playerId))
                         {
+                            var unitLines = string.Join(", ", npcUnits.Select(u => $"{u.Value}x {u.Key}"));
                             _db.Messages.Add(new Message(
                                 senderPlayerId: playerId,
                                 receiverPlayerId: playerId,
                                 subject: $"Scout Report \u2014 {op.TargetPoiId}",
-                                body: $"Your scout of {op.TargetPoiId} returned. Tier {tier} defenders detected. {npcUnits.Sum(u => u.Value)} total NPC units.",
+                                body: $"Scout of {op.TargetPoiId} returned. Tier {tier} POI. Defenders: {unitLines}.",
                                 messageType: "report"));
                         }
                     }
 
                     op.MarkArrived();
+                    if (op.OperationType == "scout_poi")
+                        op.MarkCompleted(op.ResultJson ?? "{}");
                 }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                     op.MarkCompleted(op.ResultJson ?? "{}");
@@ -189,21 +192,6 @@ namespace TheFallenWastes_WebAPI.Controllers
             // Operation starts as "outbound" — resolved when GET is polled after ArrivesAtUtc
 
             _db.Operations.Add(operation);
-
-            // Send report to attacker player
-            var attackerPlayer = await _db.Players
-                .FirstOrDefaultAsync(p => p.Id == settlement.PlayerId);
-
-            if (attackerPlayer != null)
-            {
-                var report = new Message(
-                    senderPlayerId: attackerPlayer.Id,
-                    receiverPlayerId: attackerPlayer.Id,
-                    subject: $"Scout Report — {request.TargetPoiId}",
-                    body: $"Your scout of {request.TargetPoiId} was successful. {request.RareTechAmount} RareTech spent. POI tier revealed.",
-                    messageType: "report");
-                _db.Messages.Add(report);
-            }
 
             await _db.SaveChangesAsync();
 

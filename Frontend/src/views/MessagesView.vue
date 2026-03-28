@@ -66,6 +66,7 @@
 
             <div class="msg-subject">
               <span v-if="activeFolder === 'inbox' && !msg.isRead" class="msg-unread-dot"></span>
+              <span v-if="getMessageIcon(msg)" class="msg-type-icon">{{ getMessageIcon(msg) }}</span>
               {{ msg.subject }}
             </div>
 
@@ -207,7 +208,8 @@ import {
   sendPlayerMessage,
   searchPlayers,
   getUnreadMessageCount,
-  markMessageAsRead
+  markMessageAsRead,
+  getReportMessages
 } from '../services/api.js'
 
 const route = useRoute()
@@ -275,8 +277,9 @@ async function loadSent() {
 
 async function loadReports() {
   try {
-    // TODO: replace with real API call when backend reports endpoint exists
-    reportMessages.value = []
+    const playerId = sessionStorage.getItem('playerId')
+    if (!playerId) { reportMessages.value = []; return }
+    reportMessages.value = await getReportMessages(playerId) ?? []
   } catch {
     reportMessages.value = []
   }
@@ -285,6 +288,18 @@ async function loadReports() {
 async function loadAllMessages() {
   await Promise.all([loadInbox(), loadSent(), loadReports()])
   await emitUnreadRefresh()
+}
+
+function getMessageIcon(msg) {
+  const subject = (msg.subject ?? '').toLowerCase()
+  const type = (msg.messageType ?? '').toLowerCase()
+  if (type === 'report' || type === 'notification') {
+    if (subject.includes('scout')) return '👁'
+    if (subject.includes('battle') || subject.includes('attack') || subject.includes('raid')) return '⚔️'
+    if (subject.includes('vault') || subject.includes('raided')) return '🧬'
+    return '📋'
+  }
+  return null
 }
 
 function switchFolder(folder) {
@@ -1043,5 +1058,10 @@ watch(() => route.query, () => {
   margin-right: 8px;
   box-shadow: 0 0 6px rgba(0,212,255,.45);
   vertical-align: middle;
+}
+
+.msg-type-icon {
+  margin-right: 5px;
+  font-size: 11px;
 }
 </style>
