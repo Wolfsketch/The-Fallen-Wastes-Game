@@ -60,7 +60,7 @@ namespace TheFallenWastes_WebAPI.Controllers
             var operations = await _db.Operations
                 .Where(o => (o.Phase != "completed" ||
                              (o.OperationType == "scout_poi" &&
-                              o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24)))
+                              (o.CompletedAtUtc == null || o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24))))
                             && (o.AttackerSettlementId == settlementId || o.TargetSettlementId == settlementId))
                 .ToListAsync();
 
@@ -128,8 +128,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                     }
 
                     op.MarkArrived();
-                    if (op.OperationType == "scout_poi")
-                        op.MarkCompleted(op.ResultJson ?? "{}");
+                    // Do NOT complete here — leave as "arrived" so the frontend
+                    // can read the result on the next poll and show the scout report.
                 }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                     op.MarkCompleted(op.ResultJson ?? "{}");
@@ -153,7 +153,7 @@ namespace TheFallenWastes_WebAPI.Controllers
             var result = operations
                 .Where(o => o.Phase != "completed" ||
                             (o.OperationType == "scout_poi" &&
-                             o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24)))
+                             (o.CompletedAtUtc == null || o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24))))
                 .Select(o =>
                 {
                     var sentUnits = string.IsNullOrEmpty(o.SentUnitsJson)
