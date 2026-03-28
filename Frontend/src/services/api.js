@@ -217,33 +217,33 @@ export async function getSettlementOperations(settlementId) {
     return response.data
 }
 
-export async function scoutPoi(settlementId, targetPoiId, rareTechAmount, targetPoiLabel = '') {
+export async function scoutPoi(settlementId, targetPoiId, rareTechAmount, targetPoiLabel = '', travelSeconds = 60) {
     const response = await api.post(`/Operations/settlement/${settlementId}/scout-poi`,
-        { targetPoiId, rareTechAmount, targetPoiLabel })
+        { targetPoiId, rareTechAmount, targetPoiLabel, travelSeconds })
     return response.data
 }
 
-export async function scoutSettlement(settlementId, targetSettlementId, rareTechAmount) {
+export async function scoutSettlement(settlementId, targetSettlementId, rareTechAmount, travelSeconds = 120) {
     const response = await api.post(`/Operations/settlement/${settlementId}/scout-settlement`,
-        { targetSettlementId, rareTechAmount })
+        { targetSettlementId, rareTechAmount, travelSeconds })
     return response.data
 }
 
-export async function attackPoi(settlementId, targetPoiId, units, raidMode) {
+export async function attackPoi(settlementId, targetPoiId, units, raidMode, travelSeconds = 300) {
     const response = await api.post(`/Operations/settlement/${settlementId}/attack-poi`,
-        { targetPoiId, units, raidMode })
+        { targetPoiId, units, raidMode, travelSeconds })
     return response.data
 }
 
-export async function attackSettlement(settlementId, targetSettlementId, units) {
+export async function attackSettlement(settlementId, targetSettlementId, units, travelSeconds = 120) {
     const response = await api.post(`/Operations/settlement/${settlementId}/attack-settlement`,
-        { targetSettlementId, units })
+        { targetSettlementId, units, travelSeconds })
     return response.data
 }
 
-export async function reinforcePoi(settlementId, targetPoiId, units) {
+export async function reinforcePoi(settlementId, targetPoiId, units, travelSeconds = 120) {
     const response = await api.post(`/Operations/settlement/${settlementId}/reinforce-poi`,
-        { targetPoiId, units })
+        { targetPoiId, units, travelSeconds })
     return response.data
 }
 

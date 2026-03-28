@@ -519,10 +519,12 @@ async function confirmScout() {
         props.settlement.id,
         selPoi.value.id,
         modal.amount,
-        selPoi.value.label ?? selPoi.value.id
+        selPoi.value.label ?? selPoi.value.id,
+        estimatedTravelSeconds.value ?? 60
       )
     } else if (modal.type === 'settlement' && sel.value?.id) {
-      await scoutSettlement(props.settlement.id, sel.value.id, modal.amount)
+      await scoutSettlement(props.settlement.id, sel.value.id, modal.amount,
+                            estimatedTravelSeconds.value ?? 120)
     }
     scoutModal.value.open = false
     if (props.refreshSettlement) await props.refreshSettlement()
@@ -663,12 +665,15 @@ async function confirmAttack() {
   try {
     if (modal.type === 'poi' && selPoi.value) {
       if (modal.isReinforce) {
-        await reinforcePoi(props.settlement.id, selPoi.value.id, units)
+        await reinforcePoi(props.settlement.id, selPoi.value.id, units,
+                           estimatedTravelSeconds.value ?? 120)
       } else {
-        await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode)
+        await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode,
+                        estimatedTravelSeconds.value ?? 300)
       }
     } else if (modal.type === 'settlement' && sel.value?.id) {
-      await attackSettlement(props.settlement.id, sel.value.id, units)
+      await attackSettlement(props.settlement.id, sel.value.id, units,
+                             estimatedTravelSeconds.value ?? 120)
     }
     attackModal.value.open = false
     if (props.refreshSettlement) await props.refreshSettlement()
