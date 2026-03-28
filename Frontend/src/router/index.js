@@ -12,6 +12,7 @@ import MessagesView from '../views/MessagesView.vue'
 import ResearchView from "../views/ResearchView.vue";
 import DefenseView from "../views/DefenseView.vue";
 import RareTechInventoryView from "../views/RareTechInventoryView.vue";
+import AllianceView from "../views/AllianceView.vue";
 
 const routes = [
     {
@@ -35,7 +36,7 @@ const routes = [
             { path: 'defense', name: 'defense', component: DefenseView },
             { path: 'raretech', name: 'raretech', component: RareTechInventoryView },
             { path: 'wasteland', name: 'wasteland',  component: WastelandView },
-            { path: 'alliance',  name: 'alliance',   component: PlaceholderView, props: { title: 'ALLIANCE', icon: '◈' } },
+            { path: 'alliance',  name: 'alliance',   component: AllianceView },
             { path: 'messages', name: 'messages', component: MessagesView },
             { path: 'ranking',   name: 'ranking',    component: RankingView, props: { title: 'RANKING', icon: '◈' } },
         ]

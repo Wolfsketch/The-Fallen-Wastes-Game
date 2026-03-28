@@ -30,6 +30,12 @@ namespace TheFallenWastes_Infrastructure
         public DbSet<Operation> Operations { get; set; }
         public DbSet<PoiState> PoiStates { get; set; }
 
+        public DbSet<Alliance> Alliances { get; set; }
+        public DbSet<AllianceMember> AllianceMembers { get; set; }
+        public DbSet<AllianceApplication> AllianceApplications { get; set; }
+        public DbSet<AllianceForumTopic> AllianceForumTopics { get; set; }
+        public DbSet<AllianceForumPost> AllianceForumPosts { get; set; }
+
         public GameDbContext(DbContextOptions<GameDbContext> options)
             : base(options)
         {
@@ -295,6 +301,81 @@ namespace TheFallenWastes_Infrastructure
 
                 entity.HasIndex(x => new { x.SettlementId, x.Key })
                     .IsUnique();
+            });
+
+            // ----------------------------
+            // ALLIANCES
+            // ----------------------------
+
+            modelBuilder.Entity<Alliance>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Name)
+                    .IsRequired()
+                    .HasMaxLength(60);
+
+                entity.Property(x => x.Tag)
+                    .IsRequired()
+                    .HasMaxLength(6);
+
+                entity.Property(x => x.Description)
+                    .HasMaxLength(2000);
+
+                entity.Property(x => x.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+
+                entity.HasIndex(x => x.Name).IsUnique();
+                entity.HasIndex(x => x.Tag).IsUnique();
+
+                entity.HasMany(x => x.Members)
+                    .WithOne()
+                    .HasForeignKey(x => x.AllianceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(x => x.Applications)
+                    .WithOne()
+                    .HasForeignKey(x => x.AllianceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(x => x.ForumTopics)
+                    .WithOne()
+                    .HasForeignKey(x => x.AllianceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AllianceMember>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Rank)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.HasIndex(x => new { x.AllianceId, x.PlayerId }).IsUnique();
+            });
+
+            modelBuilder.Entity<AllianceApplication>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Message).HasMaxLength(500);
+                entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            });
+
+            modelBuilder.Entity<AllianceForumTopic>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Title).IsRequired().HasMaxLength(120);
+
+                entity.HasMany(x => x.Posts)
+                    .WithOne()
+                    .HasForeignKey(x => x.TopicId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AllianceForumPost>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Content).IsRequired().HasMaxLength(5000);
             });
         }
     }

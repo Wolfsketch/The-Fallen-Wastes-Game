@@ -446,6 +446,7 @@ async function toggleReadStatus(msg) {
 function getMessageIcon(msg) {
   const subject = (msg.subject ?? '').toLowerCase()
   const type = (msg.messageType ?? '').toLowerCase()
+  if (type === 'alliance_invite') return '◈'
   if (type === 'report' || type === 'notification') {
     if (subject.includes('scout')) return '👁'
     if (subject.includes('battle') || subject.includes('attack') || subject.includes('raid')) return '⚔️'

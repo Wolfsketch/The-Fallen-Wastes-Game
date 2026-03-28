@@ -280,4 +280,123 @@ export async function getReportMessages(playerId) {
     return response.data
 }
 
+// ── Alliances ─────────────────────────────────
+
+export async function getAlliances() {
+    const response = await api.get('/alliances')
+    return response.data
+}
+
+export async function getAlliance(id) {
+    const response = await api.get(`/alliances/${id}`)
+    return response.data
+}
+
+export async function getPlayerAlliance(playerId) {
+    const response = await api.get(`/alliances/player/${playerId}`)
+    return response.data
+}
+
+export async function createAlliance(playerId, name, tag) {
+    const response = await api.post('/alliances', { playerId, name, tag })
+    return response.data
+}
+
+export async function applyToAlliance(allianceId, playerId, message = '') {
+    const response = await api.post(`/alliances/${allianceId}/apply`, { playerId, message })
+    return response.data
+}
+
+export async function inviteToAlliance(allianceId, requesterId, targetPlayerId, message = '') {
+    const response = await api.post(`/alliances/${allianceId}/invite`, { requesterId, targetPlayerId, message })
+    return response.data
+}
+
+export async function acceptAllianceApplication(allianceId, appId, requesterId) {
+    const response = await api.post(`/alliances/${allianceId}/applications/${appId}/accept`, { requesterId })
+    return response.data
+}
+
+export async function rejectAllianceApplication(allianceId, appId, requesterId) {
+    const response = await api.post(`/alliances/${allianceId}/applications/${appId}/reject`, { requesterId })
+    return response.data
+}
+
+export async function acceptAllianceInvitation(allianceId, appId, playerId) {
+    const response = await api.post(`/alliances/${allianceId}/invitations/${appId}/accept`, { playerId })
+    return response.data
+}
+
+export async function rejectAllianceInvitation(allianceId, appId, playerId) {
+    const response = await api.post(`/alliances/${allianceId}/invitations/${appId}/reject`, { playerId })
+    return response.data
+}
+
+export async function getPlayerInvitations(playerId) {
+    const response = await api.get(`/alliances/invitations/player/${playerId}`)
+    return response.data
+}
+
+export async function getPlayerAllianceApplications(playerId) {
+    const response = await api.get(`/alliances/applications/player/${playerId}`)
+    return response.data
+}
+
+export async function kickAllianceMember(allianceId, targetPlayerId, requesterId) {
+    const response = await api.post(`/alliances/${allianceId}/kick/${targetPlayerId}`, { requesterId })
+    return response.data
+}
+
+export async function leaveAlliance(allianceId, playerId) {
+    const response = await api.post(`/alliances/${allianceId}/leave`, { playerId })
+    return response.data
+}
+
+export async function dissolveAlliance(allianceId, playerId) {
+    const response = await api.delete(`/alliances/${allianceId}`, { data: { playerId } })
+    return response.data
+}
+
+export async function updateAllianceSettings(allianceId, requesterId, name, tag, description, status, minPoints) {
+    const response = await api.put(`/alliances/${allianceId}/settings`, {
+        requesterId, name, tag, description, status, minPoints
+    })
+    return response.data
+}
+
+export async function setAllianceMemberRank(allianceId, targetPlayerId, requesterId, rank) {
+    const response = await api.post(`/alliances/${allianceId}/members/${targetPlayerId}/rank`, { requesterId, rank })
+    return response.data
+}
+
+export async function getAllianceForumTopics(allianceId) {
+    const response = await api.get(`/alliances/${allianceId}/forum`)
+    return response.data
+}
+
+export async function createForumTopic(allianceId, authorPlayerId, title, content = '') {
+    const response = await api.post(`/alliances/${allianceId}/forum`, { authorPlayerId, title, content })
+    return response.data
+}
+
+export async function getForumTopic(allianceId, topicId) {
+    const response = await api.get(`/alliances/${allianceId}/forum/${topicId}`)
+    return response.data
+}
+
+export async function addForumPost(allianceId, topicId, authorPlayerId, content) {
+    const response = await api.post(`/alliances/${allianceId}/forum/${topicId}/posts`, { authorPlayerId, content })
+    return response.data
+}
+
+export async function deleteForumPost(allianceId, topicId, postId, playerId) {
+    const response = await api.delete(`/alliances/${allianceId}/forum/${topicId}/posts/${postId}`, { data: { playerId } })
+    return response.data
+}
+
+export async function deleteForumTopic(allianceId, topicId, playerId) {
+    const response = await api.delete(`/alliances/${allianceId}/forum/${topicId}`, { data: { playerId } })
+    return response.data
+}
+
 export default api

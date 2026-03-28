@@ -36,6 +36,8 @@ namespace TheFallenWastes_Domain.Entities
 
         public ICollection<Settlement> Settlements { get; private set; }
 
+        public Guid? AllianceId { get; private set; }
+
         public int DataVersion { get; private set; }
 
         private Player()
@@ -83,6 +85,20 @@ namespace TheFallenWastes_Domain.Entities
 
             Settlements = new List<Settlement>();
             DataVersion = 1;
+        }
+
+        // ALLIANCE
+
+        public void JoinAlliance(Guid allianceId)
+        {
+            if (allianceId == Guid.Empty)
+                throw new ArgumentException("AllianceId cannot be empty.", nameof(allianceId));
+            AllianceId = allianceId;
+        }
+
+        public void LeaveAlliance()
+        {
+            AllianceId = null;
         }
 
         // COMMANDER
