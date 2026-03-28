@@ -141,7 +141,14 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 senderPlayerId: playerId,
                                 receiverPlayerId: playerId,
                                 subject: $"Scout Report \u2014 {poiName}",
-                                body: $"Scout of {poiName} returned. Tier {tier} POI. Defenders: {unitLines}.",
+                                body: JsonSerializer.Serialize(new
+                                {
+                                    isScoutReport = true,
+                                    poiName,
+                                    tier,
+                                    npcUnits = currentNpcUnits,
+                                    lootItems = currentLootItems
+                                }),
                                 messageType: "report"));
                         }
                     }
@@ -330,6 +337,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                             ? Math.Max(0, (o.ReturnsAtUtc.Value - now).TotalSeconds)
                             : 0;
 
+                    // EF Core loads DateTime with Kind=Unspecified; force Utc so JSON serializer
+                    // includes the 'Z' suffix and JavaScript parses as UTC (not local time).
+                    static DateTime Utc(DateTime dt) => DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                    static DateTime? UtcN(DateTime? dt) => dt.HasValue ? DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc) : null;
+
                     return new
                     {
                         o.Id,
@@ -344,9 +356,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                         SentUnits = sentUnits,
                         o.ScoutRareTech,
                         o.RaidMode,
-                        o.StartedAtUtc,
-                        o.ArrivesAtUtc,
-                        o.ReturnsAtUtc,
+                        StartedAtUtc = Utc(o.StartedAtUtc),
+                        ArrivesAtUtc = Utc(o.ArrivesAtUtc),
+                        ReturnsAtUtc = UtcN(o.ReturnsAtUtc),
                         TravelSeconds = (int)(o.ArrivesAtUtc - o.StartedAtUtc).TotalSeconds,
                         RemainingSeconds = (int)remainingSeconds,
                         IsOwn = o.AttackerSettlementId == settlementId,

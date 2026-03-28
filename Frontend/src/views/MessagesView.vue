@@ -71,7 +71,7 @@
             </div>
 
             <div class="msg-preview">
-              {{ msg.body }}
+              {{ getMessagePreview(msg) }}
             </div>
           </button>
         </div>
@@ -183,7 +183,10 @@
               <div class="report-col">
                 <div class="report-section-title">YOUR FORCES SENT</div>
                 <div v-for="(qty, name) in parsedReportBody.attackerSentUnits" :key="'sent'+name" class="report-unit-row">
-                  <span class="report-unit-icon">{{ getUnitIcon(name) }}</span>
+                  <span class="report-unit-icon">
+                    <img v-if="getUnitImage(name)" :src="getUnitImage(name)" class="unit-img-small" :alt="name" />
+                    <span v-else>{{ getUnitIcon(name) }}</span>
+                  </span>
                   <span class="report-unit-name">{{ name }}</span>
                   <span class="report-unit-qty">× {{ qty }}</span>
                 </div>
@@ -191,7 +194,10 @@
               <div class="report-col">
                 <div class="report-section-title">LOSSES</div>
                 <div v-for="(qty, name) in parsedReportBody.attackerLosses" :key="'loss'+name" class="report-unit-row report-unit-row--loss">
-                  <span class="report-unit-icon">{{ getUnitIcon(name) }}</span>
+                  <span class="report-unit-icon">
+                    <img v-if="getUnitImage(name)" :src="getUnitImage(name)" class="unit-img-small" :alt="name" />
+                    <span v-else>{{ getUnitIcon(name) }}</span>
+                  </span>
                   <span class="report-unit-name">{{ name }}</span>
                   <span class="report-unit-qty report-qty--red">-{{ qty }}</span>
                 </div>
@@ -215,7 +221,48 @@
             </div>
           </div>
 
-          <!-- SCOUT REPORT (plain text) -->
+          <!-- SCOUT REPORT (rich card) -->
+          <div v-else-if="parsedReportBody?.isScoutReport" class="report-card scout-report-card">
+            <div class="scout-report-header">
+              <div class="scout-report-title">👁 INTELLIGENCE REPORT</div>
+              <div class="scout-tier-badge" :class="`tier--${parsedReportBody.tier}`">
+                TIER {{ parsedReportBody.tier }}
+              </div>
+            </div>
+
+            <div class="scout-target-row">
+              <span class="scout-label">TARGET</span>
+              <span class="scout-poi-name">{{ parsedReportBody.poiName }}</span>
+            </div>
+
+            <div class="report-section-title" style="margin-top:6px">DEFENDERS DETECTED</div>
+            <div v-if="!Object.keys(parsedReportBody.npcUnits ?? {}).length" class="scout-no-defenders">
+              ☉ No defenders remaining at this location
+            </div>
+            <div v-else class="scout-unit-grid">
+              <div v-for="(qty, name) in parsedReportBody.npcUnits" :key="name" class="scout-unit-card">
+                <div class="scout-unit-img-wrap">
+                  <img v-if="getUnitImage(name)" :src="getUnitImage(name)" :alt="name" class="scout-unit-img" />
+                  <span v-else class="scout-unit-fallback">💀</span>
+                </div>
+                <div class="scout-unit-name">{{ name }}</div>
+                <div class="scout-unit-count">× {{ qty }}</div>
+              </div>
+            </div>
+
+            <template v-if="parsedReportBody.lootItems?.length">
+              <div class="report-section-title" style="margin-top:8px">SALVAGEABLE LOOT</div>
+              <div class="scout-loot-grid">
+                <div v-for="item in parsedReportBody.lootItems" :key="item" class="scout-loot-item">
+                  <span class="scout-loot-icon">🧬</span>
+                  <span class="scout-loot-name">{{ item }}</span>
+                </div>
+              </div>
+            </template>
+            <div v-else class="scout-no-loot">No salvageable loot detected at this location.</div>
+          </div>
+
+          <!-- Plain text fallback (old messages / regular messages) -->
           <div v-else class="detail-body">{{ selectedMessage.body }}</div>
 
           <div class="compose-actions">
@@ -671,6 +718,29 @@ const parsedReportBody = computed(() => {
   return null
 })
 
+const unitImages = import.meta.glob('../images/*.png', { eager: true, import: 'default' })
+
+function getUnitImage(unitName) {
+  const key = `../images/${unitName}.png`
+  return unitImages[key] ?? null
+}
+
+function getMessagePreview(msg) {
+  try {
+    const parsed = JSON.parse(msg.body)
+    if (parsed?.isScoutReport) {
+      const units = Object.entries(parsed.npcUnits ?? {}).map(([k, v]) => `${v}x ${k}`).join(', ')
+      return `Tier ${parsed.tier} POI. Defenders: ${units || 'None'}.`
+    }
+    if (parsed?.attackerWins !== undefined) {
+      return parsed.attackerWins
+        ? `Victory at ${parsed.poiName}`
+        : `Defeated at ${parsed.poiName}`
+    }
+  } catch {}
+  return msg.body
+}
+
 function getUnitIcon(unitName) {
   const name = (unitName ?? '').toLowerCase()
   if (name.includes('scavenger')) return '🏃'
@@ -1097,6 +1167,119 @@ watch(() => route.query, () => {
   border: 1px solid var(--border);
 }
 .report-loot-item { font-size: 11px; color: var(--green); padding: 3px 0; }
+
+/* Unit images in battle report */
+.unit-img-small { width: 26px; height: 26px; object-fit: contain; display: block; }
+
+/* Scout report card */
+.scout-report-card { gap: 12px; }
+.scout-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: linear-gradient(90deg, rgba(0,212,255,.09), rgba(0,212,255,.03));
+  border: 1px solid rgba(0,212,255,.28);
+  margin-bottom: 4px;
+}
+.scout-report-title {
+  font-family: var(--ff-title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--cyan);
+}
+.scout-tier-badge {
+  font-family: var(--ff-title);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 4px 14px;
+  border: 1px solid;
+}
+.tier--1 { color: #80c8d8; border-color: rgba(128,200,216,.45); background: rgba(128,200,216,.08); }
+.tier--2 { color: #ffc830; border-color: rgba(255,200,48,.45); background: rgba(255,200,48,.08); }
+.tier--3 { color: #ff9040; border-color: rgba(255,144,64,.45); background: rgba(255,144,64,.09); }
+.scout-target-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 2px 2px;
+}
+.scout-label {
+  font-size: 8px;
+  color: var(--cyan-dim);
+  font-family: var(--ff-title);
+  letter-spacing: 2px;
+}
+.scout-poi-name {
+  font-size: 15px;
+  color: var(--bright);
+  font-weight: 700;
+}
+.scout-unit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.scout-unit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 8px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  transition: border-color .15s;
+}
+.scout-unit-card:hover { border-color: rgba(255,100,60,.4); }
+.scout-unit-img-wrap {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scout-unit-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(255,80,40,.35));
+}
+.scout-unit-fallback { font-size: 26px; }
+.scout-unit-name {
+  font-size: 9px;
+  color: var(--text);
+  font-family: var(--ff-title);
+  letter-spacing: .5px;
+  text-align: center;
+  line-height: 1.3;
+}
+.scout-unit-count {
+  font-family: var(--ff-title);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red);
+}
+.scout-no-defenders {
+  font-size: 11px;
+  color: var(--green);
+  padding: 10px 14px;
+  border: 1px solid rgba(48,255,128,.2);
+  background: rgba(48,255,128,.04);
+}
+.scout-loot-grid { display: flex; flex-direction: column; gap: 4px; }
+.scout-loot-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+.scout-loot-icon { font-size: 14px; flex-shrink: 0; }
+.scout-loot-name { font-size: 11px; color: var(--green); font-family: var(--ff-title); letter-spacing: .5px; }
+.scout-no-loot { font-size: 11px; color: var(--muted); font-style: italic; padding: 6px 2px; }
 
 .messages-empty {
   align-items: center;

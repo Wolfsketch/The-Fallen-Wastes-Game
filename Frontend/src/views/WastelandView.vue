@@ -7,7 +7,7 @@
       </div>
       <div class="tb-center">[ {{ viewX }}, {{ viewY }} ] — {{ claimedCount }}/{{ slots.length }} claimed</div>
       <div class="tb-right">
-        <div class="tb-movements" v-if="operations.value?.length > 0 || activeOperations.length > 0">
+        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0">
           <button class="tb-btn tb-movements-btn"
                   @click="showMovementsPanel = !showMovementsPanel"
                   :class="{ 'tb-movements-btn--active': showMovementsPanel }">
@@ -115,6 +115,7 @@
         </div>
 
         <button class="tb-btn" @click="centerOnPlayer">⊕</button>
+        <button class="tb-btn" @click="zoomIn" :disabled="zoom >= 3">+</button>
         <span class="tb-zoom">{{ Math.round(zoom * 100) }}%</span>
         <button class="tb-btn" @click="zoomOut" :disabled="zoom <= minZoom">−</button>
       </div>
@@ -211,7 +212,7 @@
             <div><div class="sp-n">{{ sel.name }}</div><div class="sp-s"><span class="sp-t" :class="`st--${sel.status}`">{{ sel.status.toUpperCase() }}</span>{{ sel.owner ? 'Owner: ' + sel.owner : 'Unclaimed' }}</div></div>
           </div>
           <template v-if="sel.status === 'yours'">
-            <div class="ss-w"><div class="ss"><div class="ssl">POP</div><div class="ssv">{{ settlement?.population }}/{{ settlement?.populationCapacity }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ player?.score }}</div></div></div>
+            <div class="ss-w"><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ player?.score }}</div></div><div class="ss"><div class="ssl">ATTACK</div><div class="ssv">{{ player?.attackScore ?? 0 }}</div></div><div class="ss"><div class="ssl">DEFENSE</div><div class="ssv">{{ player?.defenseScore ?? 0 }}</div></div></div>
           </template>
           <template v-if="sel.status === 'ally'">
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv ssv--a">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">ALLIANCE</div><div class="ssv ssv--a">{{ sel.alliance || '—' }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
@@ -401,6 +402,7 @@
               <div v-if="ownedUnits.length === 0" class="modal-hint">No units available in inventory.</div>
               <div v-else class="modal-unit-list">
                 <div v-for="u in ownedUnits" :key="u.name" class="modal-unit-row">
+                  <img v-if="getUnitImage(u.name)" :src="getUnitImage(u.name)" class="modal-unit-img" :alt="u.name" />
                   <span class="modal-unit-name">{{ u.name }}</span>
                   <span class="modal-unit-avail">{{ u.qty }} avail</span>
                   <div class="modal-input-row">
@@ -563,6 +565,10 @@ import { generateSlotsFromElevation, generatePOIsFromElevation } from '../compos
 import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates, recallOperation } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
+const unitImages = import.meta.glob('../images/*.png', { eager: true, import: 'default' })
+function getUnitImage(name) {
+  return unitImages[`../images/${name}.png`] ?? null
+}
 
 const props = defineProps({ player: Object, settlement: Object, refreshSettlement: Function })
 const player = computed(() => props.player)
@@ -637,6 +643,7 @@ const selectedPoiScoutResult = computed(() => {
 })
 
 // Stippen enkel voor eigen + alliantie — neutrale/vijand volledig verborgen
+let _lastReturnLogS = 0
 const activeOperationMarkers = computed(() => {
   const now = frameTime.value
   const outbound = operations.value
@@ -650,12 +657,26 @@ const activeOperationMarkers = computed(() => {
       }
     })
 
+  // Debug: log all ops that have returning phase, regardless of filters
+  const _s = Math.floor(Date.now() / 1000)
+  if (_s !== _lastReturnLogS) {
+    _lastReturnLogS = _s
+    const allReturning = operations.value.filter(op => op.phase === 'returning')
+    if (allReturning.length > 0) {
+      allReturning.forEach(op => {
+        console.log(`[RETURN-CHECK] id=${op.id} isOwn=${op.isOwn} returnsAtUtc=${op.returnsAtUtc} travelDuration=${op.travelDuration} originX=${op.originX} destX=${op.destX}`)
+      })
+    }
+  }
+
   const returning = operations.value
     .filter(op => op.phase === 'returning' && op.isOwn && op.returnsAtUtc)
     .map(op => {
-      const totalReturn = new Date(op.returnsAtUtc).getTime() - new Date(op.arrivesAtUtc).getTime()
-      const elapsed = now - new Date(op.arrivesAtUtc).getTime()
-      const progress = totalReturn > 0 ? Math.min(1, elapsed / totalReturn) : 1
+      const returnStartMs = new Date(op.returnsAtUtc).getTime() - op.travelDuration
+      const elapsed = now - returnStartMs
+      const progress = op.travelDuration > 0
+        ? Math.min(1, Math.max(0, elapsed / op.travelDuration))
+        : 1
       return {
         ...op,
         x: op.destX + (op.originX - op.destX) * progress,
@@ -681,17 +702,21 @@ const raidModes = [
 
 const scoutError = ref('')
 const scoutReport = ref(null)
-const _storedIds = (() => {
-  try { return JSON.parse(sessionStorage.getItem('shownReportIds') ?? '[]') }
-  catch { return [] }
-})()
-const shownReportIds = new Set(_storedIds)
+const shownReportIds = new Set()
+
+function reportIdsKey() { return `shownReportIds_${props.settlement?.id ?? 'unknown'}` }
+function loadShownReportIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(reportIdsKey()) ?? '[]')
+    stored.forEach(id => shownReportIds.add(String(id)))
+  } catch {}
+}
 
 function markReportShown(id) {
   shownReportIds.add(String(id))
   try {
-    sessionStorage.setItem('shownReportIds',
-      JSON.stringify([...shownReportIds].slice(-200)))
+    localStorage.setItem(reportIdsKey(),
+      JSON.stringify([...shownReportIds].slice(-500)))
   } catch {}
 }
 
@@ -720,6 +745,19 @@ const currentRareTech = computed(() =>
 const vaultRareTech = computed(() => props.settlement?.vaultRareTech ?? 0)
 const raidVaultLevel = computed(() => props.settlement?.raidVaultLevel ?? 0)
 
+// Unit movement speeds (higher = faster). Reference speed = 12 (Rifleman).
+const UNIT_SPEEDS = {
+  'Scavenger': 14, 'Raider': 18, 'Outpost Defender': 10,
+  'Rifleman': 12, 'Shock Fighter': 12, 'Sniper': 11,
+  'Flame Trooper': 10, 'Power Trooper': 9,
+  'Assault Bike': 22, 'Rust Buggy': 24, 'War Rig': 13,
+  'Interceptor': 17, 'Siege Carrier': 7,
+  'Wall Breaker': 7, 'EMP Launcher': 8, 'Laser Squad': 10,
+  'Rad Bomber': 6, 'Drone Swarm': 19,
+  'Convoy': 5, 'Settler Convoy': 5
+}
+const REFERENCE_SPEED = 12
+
 const estimatedTravelSeconds = computed(() => {
   const own = slots.value.find(s => s.status === 'yours')
   if (!own) return null
@@ -738,7 +776,16 @@ const estimatedTravelSeconds = computed(() => {
     }
   }
   const dist = Math.sqrt(Math.pow(destX - own.x, 2) + Math.pow(destY - own.y, 2))
-  return Math.max(30, Math.round(dist * 0.3))
+  let speedFactor = 1
+  if (attackModal.value.open) {
+    const selected = Object.entries(attackModal.value.selectedUnits)
+      .filter(([, qty]) => (qty || 0) > 0)
+      .map(([name]) => UNIT_SPEEDS[name] ?? REFERENCE_SPEED)
+    if (selected.length === 0) return null  // no units selected → show —
+    const slowest = Math.min(...selected)
+    speedFactor = slowest / REFERENCE_SPEED
+  }
+  return Math.max(30, Math.round(dist * 0.3 / speedFactor))
 })
 
 function formatTravelTime(seconds) {
@@ -768,6 +815,8 @@ async function confirmScout() {
   const modal = scoutModal.value
   if (!props.settlement?.id) return
   scoutError.value = ''
+  // Capture travel time BEFORE modal closes (estimatedTravelSeconds depends on modal.open)
+  const _travelSec = estimatedTravelSeconds.value ?? 60
   try {
     if (modal.type === 'poi' && selPoi.value) {
       await scoutPoi(
@@ -775,11 +824,10 @@ async function confirmScout() {
         selPoi.value.id,
         modal.amount,
         selPoi.value.label ?? selPoi.value.id,
-        estimatedTravelSeconds.value ?? 60
+        _travelSec
       )
     } else if (modal.type === 'settlement' && sel.value?.id) {
-      await scoutSettlement(props.settlement.id, sel.value.id, modal.amount,
-                            estimatedTravelSeconds.value ?? 120)
+      await scoutSettlement(props.settlement.id, sel.value.id, modal.amount, _travelSec)
     }
     scoutModal.value.open = false
 
@@ -787,7 +835,7 @@ async function confirmScout() {
     const ownSlot = slots.value.find(s => s.status === 'yours')
     const targetPoi = selPoi.value
     if (ownSlot && targetPoi) {
-      const travelMs = (estimatedTravelSeconds.value ?? 60) * 1000
+      const travelMs = _travelSec * 1000
       operations.value.push({
         id: 'local-scout-' + Date.now(),
         phase: 'outbound',
@@ -811,13 +859,14 @@ async function confirmScout() {
       })
       // Persist local ops to survive tab navigation
       try {
-        const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+        const _key = localOpsKey()
+        const stored = JSON.parse(sessionStorage.getItem(_key) ?? '[]')
         stored.push({
           ...operations.value[operations.value.length - 1],
           _savedAt: Date.now()
         })
         const alive = stored.filter(o => Date.now() - o._savedAt < o.travelDuration)
-        sessionStorage.setItem('localOps', JSON.stringify(alive))
+        sessionStorage.setItem(_key, JSON.stringify(alive))
       } catch {}
       renderMap()
     }
@@ -832,24 +881,28 @@ async function confirmScout() {
 
 function confirmRaid() { /* replaced — see confirmAttack */ }
 
+function localOpsKey() { return `localOps_${props.settlement?.id ?? 'unknown'}` }
+
 async function loadOperations() {
   if (!props.settlement?.id) return
+  loadShownReportIds()
+  const _key = localOpsKey()
   try {
     // Aggressive cleanup: drop stale ops older than 2x their travel time
     try {
-      const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+      const stored = JSON.parse(sessionStorage.getItem(_key) ?? '[]')
       const alive = stored.filter(o => {
         const age = Date.now() - o.startTime
         return age < o.travelDuration * 2
       })
       if (alive.length !== stored.length) {
-        sessionStorage.setItem('localOps', JSON.stringify(alive))
+        sessionStorage.setItem(_key, JSON.stringify(alive))
       }
     } catch {}
 
     // Restore local ops from sessionStorage if still traveling
     try {
-      const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+      const stored = JSON.parse(sessionStorage.getItem(_key) ?? '[]')
       const alive = stored.filter(o => {
         const elapsed = Date.now() - o._savedAt
         return elapsed < o.travelDuration
@@ -859,10 +912,12 @@ async function loadOperations() {
           operations.value.push(o)
         }
       })
-      sessionStorage.setItem('localOps', JSON.stringify(alive))
+      sessionStorage.setItem(_key, JSON.stringify(alive))
     } catch {}
 
     const data = await getSettlementOperations(props.settlement.id)
+    // Normalize: .NET may serialize DateTime without Z if Kind=Unspecified → JS parses as local time
+    const utcStr = s => !s ? null : (s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
     const newOps = (data || []).map(op => ({
       id: op.id,
       phase: (() => {
@@ -871,7 +926,7 @@ async function loadOperations() {
         // This prevents stale old operations (from previous sessions)
         // from briefly showing as outbound with 900%+ progress.
         if (op.phase === 'outbound' && op.arrivesAtUtc) {
-          const arrivesAt = new Date(op.arrivesAtUtc).getTime()
+          const arrivesAt = new Date(utcStr(op.arrivesAtUtc)).getTime()
           if (Date.now() >= arrivesAt) return 'arrived'
         }
         return op.phase
@@ -880,12 +935,12 @@ async function loadOperations() {
       originX: 0, originY: 0,
       destX: 0, destY: 0,
       startTime: op.startedAtUtc
-        ? new Date(op.startedAtUtc).getTime()
+        ? new Date(utcStr(op.startedAtUtc)).getTime()
         : op.arrivesAtUtc
-          ? new Date(op.arrivesAtUtc).getTime() - ((op.travelSeconds ?? op.TravelSeconds ?? 60)) * 1000
+          ? new Date(utcStr(op.arrivesAtUtc)).getTime() - ((op.travelSeconds ?? op.TravelSeconds ?? 60)) * 1000
           : Date.now(),
       travelDuration: ((op.travelSeconds ?? op.TravelSeconds ?? 60)) * 1000,
-      arrivesAtUtc: op.arrivesAtUtc,
+      arrivesAtUtc: utcStr(op.arrivesAtUtc),
       isOwn: op.isOwn,
       isAlliance: false,
       poiId: op.targetPoiId ?? null,
@@ -899,7 +954,7 @@ async function loadOperations() {
       lootItemsEarned: op.lootItemsEarned ?? op.LootItemsEarned ?? 0,
       lootIntervalSeconds: op.lootIntervalSeconds ?? op.LootIntervalSeconds ?? 300,
       poiLabel: op.targetPoiLabel ?? op.TargetPoiLabel ?? op.targetPoiId ?? null,
-      returnsAtUtc: op.returnsAtUtc ?? op.ReturnsAtUtc ?? null,
+      returnsAtUtc: utcStr(op.returnsAtUtc ?? op.ReturnsAtUtc ?? null),
     }))
 
     // Keep currently-animating outbound ops not yet in the new data
@@ -928,27 +983,12 @@ async function loadOperations() {
       }
     })
 
-    const unresolved = operations.value.filter(op => op.isOwn && op.originX === 0 && op.originY === 0)
-    if (unresolved.length > 0) {
-      console.warn('Operations with unresolved coordinates:', unresolved.map(o => o.id))
-      console.log('Own slot found:', slots.value.find(s => s.status === 'yours'))
-    }
 
-    const outboundOwn = operations.value.filter(op => op.phase === 'outbound' && op.isOwn)
-    console.log('[OPS] outbound own count:', outboundOwn.length)
-    outboundOwn.forEach(op => {
-      console.log(`[OPS] op ${op.id}: origin(${op.originX},${op.originY}) dest(${op.destX},${op.destY}) ` +
-        `startTime=${new Date(op.startTime).toISOString()} ` +
-        `travelDuration=${op.travelDuration}ms ` +
-        `progress=${((Date.now()-op.startTime)/op.travelDuration*100).toFixed(1)}%`)
-    })
-    console.log('[OPS] slots count:', slots.value.length,
-      'own slot:', slots.value.find(s=>s.status==='yours'))
-    console.log('[OPS] pois count:', pois.value.length)
 
     operations.value.forEach(op => {
       if (op.operationType === 'scout_poi' && op.phase === 'arrived' && op.resultJson
-          && !shownReportIds.has(String(op.id))) {
+          && !shownReportIds.has(String(op.id))
+          && op.arrivesAtUtc && (Date.now() - new Date(op.arrivesAtUtc).getTime()) < 5 * 60 * 1000) {
         markReportShown(op.id)
         try {
           const result = JSON.parse(op.resultJson)
@@ -964,7 +1004,8 @@ async function loadOperations() {
         } catch {}
       }
       if (op.operationType === 'raid_poi' && op.phase === 'arrived'
-          && !shownReportIds.has(String(op.id))) {
+          && !shownReportIds.has(String(op.id))
+          && op.arrivesAtUtc && (Date.now() - new Date(op.arrivesAtUtc).getTime()) < 5 * 60 * 1000) {
         markReportShown(op.id)
         let battleData = null
         try { battleData = op.resultJson ? JSON.parse(op.resultJson) : null } catch {}
@@ -1012,18 +1053,17 @@ async function confirmAttack() {
     modal.error = 'Select at least 1 unit to send.'
     return
   }
+  // Capture travel time BEFORE modal closes (estimatedTravelSeconds depends on modal.open)
+  const _travelSec = estimatedTravelSeconds.value ?? 300
   try {
     if (modal.type === 'poi' && selPoi.value) {
       if (modal.isReinforce) {
-        await reinforcePoi(props.settlement.id, selPoi.value.id, units,
-                           estimatedTravelSeconds.value ?? 120)
+        await reinforcePoi(props.settlement.id, selPoi.value.id, units, _travelSec)
       } else {
-        await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode,
-                        estimatedTravelSeconds.value ?? 300)
+        await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode, _travelSec)
       }
     } else if (modal.type === 'settlement' && sel.value?.id) {
-      await attackSettlement(props.settlement.id, sel.value.id, units,
-                             estimatedTravelSeconds.value ?? 120)
+      await attackSettlement(props.settlement.id, sel.value.id, units, _travelSec)
     }
     const _wasReinforce = modal.isReinforce ?? false
     const _type = modal.type
@@ -1034,7 +1074,7 @@ async function confirmAttack() {
     const targetPoiA = _type === 'poi' ? selPoi.value : null
     const targetSlotA = _type === 'settlement' ? sel.value : null
     if (ownSlotA && (targetPoiA || targetSlotA)) {
-      const travelMs = (estimatedTravelSeconds.value ?? 300) * 1000
+      const travelMs = _travelSec * 1000
       const destX = targetPoiA ? targetPoiA.x : (targetSlotA?.x ?? 0)
       const destY = targetPoiA ? targetPoiA.y : (targetSlotA?.y ?? 0)
       operations.value.push({
@@ -1062,13 +1102,14 @@ async function confirmAttack() {
       })
       // Persist local ops to survive tab navigation
       try {
-        const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+        const _key = localOpsKey()
+        const stored = JSON.parse(sessionStorage.getItem(_key) ?? '[]')
         stored.push({
           ...operations.value[operations.value.length - 1],
           _savedAt: Date.now()
         })
         const alive = stored.filter(o => Date.now() - o._savedAt < o.travelDuration)
-        sessionStorage.setItem('localOps', JSON.stringify(alive))
+        sessionStorage.setItem(_key, JSON.stringify(alive))
       } catch {}
       renderMap()
     }
@@ -1372,32 +1413,33 @@ function renderMap() {
   // Stippellijnen enkel voor eigen + alliantie operaties
   const nowMs = Date.now()
   // Debug: log when drawing ops
-  if (operations.value.filter(op => op.phase==='outbound').length > 0) {
-    // Only log once every 5s to avoid spam
-    if (!window._lastOpLog || Date.now() - window._lastOpLog > 5000) {
-      window._lastOpLog = Date.now()
-      console.log('[RENDER] drawing',
-        operations.value.filter(op=>op.phase==='outbound').length,
-        'outbound ops')
-    }
-  }
+
+  let _drewReturning = 0
   for (const op of operations.value) {
-    if (op.phase !== 'outbound') continue
+    if (op.phase !== 'outbound' && op.phase !== 'returning') continue
     if (!op.isOwn && !op.isAlliance) continue
-    const progress = Math.min(1, (nowMs - op.startTime) / op.travelDuration)
-    const curX = op.originX + (op.destX - op.originX) * progress
-    const curY = op.originY + (op.destY - op.originY) * progress
+    if (op.phase === 'returning') _drewReturning++
     const color = op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
     ctx.save()
     ctx.setLineDash([5 / zoom.value, 7 / zoom.value])
     ctx.lineWidth = 1.5 / zoom.value
     ctx.strokeStyle = color
     ctx.beginPath()
-    // Draw the full route immediately; visual progress shown by the moving pulsing dot (.op-dot)
-    ctx.moveTo(op.originX, op.originY)
-    ctx.lineTo(op.destX, op.destY)
+    if (op.phase === 'returning') {
+      // Draw line from dest back to origin
+      ctx.moveTo(op.destX, op.destY)
+      ctx.lineTo(op.originX, op.originY)
+    } else {
+      ctx.moveTo(op.originX, op.originY)
+      ctx.lineTo(op.destX, op.destY)
+    }
     ctx.stroke()
     ctx.restore()
+  }
+  if (!window._lastReturnDrawLog || Date.now() - window._lastReturnDrawLog > 1000) {
+    window._lastReturnDrawLog = Date.now()
+    if (_drewReturning > 0) console.log(`[CANVAS] drew ${_drewReturning} returning line(s)`)
+    else if (operations.value.some(op => op.phase === 'returning')) console.log('[CANVAS] returning op exists but NOT drawn (isOwn/isAlliance check failed?)')
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -1527,9 +1569,23 @@ onMounted(async () => {
 
   frameInterval = setInterval(() => {
     frameTime.value = Date.now()
+    const now = Date.now()
+    const removedReturning = operations.value.filter(op => {
+      if (op.phase !== 'returning') return false
+      if (!op.returnsAtUtc) return false
+      return now >= new Date(op.returnsAtUtc).getTime()
+    })
+    if (removedReturning.length > 0) {
+      console.log('[FRAME-REMOVE-RETURNING]', removedReturning.map(o => `id=${o.id} returnsAtUtc=${o.returnsAtUtc} now=${new Date(now).toISOString()}`))
+    }
     operations.value = operations.value.filter(op => {
       if (op.phase === 'arrived') return true
-      return (Date.now() - op.startTime) / op.travelDuration < 1
+      if (op.phase === 'returning') {
+        // Keep until returnsAtUtc has passed
+        if (!op.returnsAtUtc) return true
+        return now < new Date(op.returnsAtUtc).getTime()
+      }
+      return (now - op.startTime) / op.travelDuration < 1
     })
   }, 120)
 })
@@ -1745,6 +1801,7 @@ onUnmounted(() => {
 .modal-box--wide{width:min(560px,94vw)}
 .modal-unit-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
 .modal-unit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);background:rgba(0,212,255,.02)}
+.modal-unit-img{width:28px;height:28px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 4px rgba(0,212,255,.3))}
 .modal-unit-name{flex:1;font-size:11px;color:var(--bright);font-weight:700}
 .modal-unit-avail{font-size:9px;color:var(--muted);font-family:var(--ff-title);letter-spacing:.8px;min-width:52px;text-align:right}
 .modal-input--sm{width:58px}
