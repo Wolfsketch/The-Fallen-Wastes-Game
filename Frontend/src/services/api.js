@@ -252,6 +252,13 @@ export async function getPoiStates() {
     return response.data
 }
 
+export async function recallOperation(settlementId, operationId) {
+    const response = await api.post(
+        `/Operations/settlement/${settlementId}/recall/${operationId}`
+    )
+    return response.data
+}
+
 export async function depositToVault(settlementId, amount) {
     const response = await api.post(`/Settlements/${settlementId}/vault/deposit`, { amount })
     return response.data
