@@ -7,6 +7,59 @@
       </div>
       <div class="tb-center">[ {{ viewX }}, {{ viewY }} ] — {{ claimedCount }}/{{ slots.length }} claimed</div>
       <div class="tb-right">
+        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0">
+          <button class="tb-btn tb-movements-btn"
+                  @click="showMovementsPanel = !showMovementsPanel"
+                  :class="{ 'tb-movements-btn--active': showMovementsPanel }">
+            ⚡ {{ activeOperations.length }}
+          </button>
+
+          <div v-if="showMovementsPanel" class="movements-panel">
+            <div class="movements-header">
+              <span class="movements-title">ACTIVE OPERATIONS</span>
+              <button class="movements-close" @click="showMovementsPanel = false">✕</button>
+            </div>
+
+            <div v-if="activeOperations.length === 0" class="movements-empty">
+              No active movements
+            </div>
+
+            <div v-for="op in activeOperations" :key="op.id" class="movement-row"
+                 @click="focusOperation(op)">
+              <div class="movement-icon">
+                {{ op.operationType === 'scout_poi' || op.operationType === 'scout_settlement' ? '👁'
+                  : op.operationType === 'reinforce_poi' ? '⛊'
+                  : op.isReinforcement ? '⛊'
+                  : '⚔' }}
+              </div>
+              <div class="movement-info">
+                <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
+                <div class="movement-units">{{ op.unitSummary ?? (op.operationType?.includes('scout') ? 'Scout' : '—') }}</div>
+              </div>
+              <div class="movement-right">
+                <div class="movement-status"
+                     :class="op.phase === 'outbound' ? 'status--outbound' : op.phase === 'arrived' ? 'status--arrived' : 'status--returning'">
+                  {{ op.phase === 'outbound' ? '→' : op.phase === 'arrived' ? '●' : '←' }}
+                </div>
+                <div class="movement-time">
+                  {{ op.phase === 'outbound'
+                    ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000)))
+                    : op.phase === 'arrived' ? 'ACTIVE'
+                    : op.returnsAtUtc ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.returnsAtUtc).getTime() - Date.now()) / 1000)))
+                    : '—' }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button v-if="scoutMasterActive"
+                class="tb-btn tb-planner-btn"
+                @click="showAttackPlanner = true"
+                title="Attack Planner">
+          📋 PLANNER
+        </button>
+
         <button class="tb-btn" @click="centerOnPlayer">⊕</button>
         <button class="tb-btn" @click="zoomIn" :disabled="zoom >= 3">+</button>
         <span class="tb-zoom">{{ Math.round(zoom * 100) }}%</span>
@@ -357,6 +410,84 @@
         </div>
         <div class="modal-footer">
           <button class="modal-confirm" @click="combatResult = null">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attack Planner Modal -->
+    <div v-if="showAttackPlanner" class="modal-backdrop" @click.self="showAttackPlanner = false">
+      <div class="wl-modal wl-modal--wide">
+        <div class="modal-header">
+          <span class="modal-title">⚔ ATTACK PLANNER</span>
+          <button class="modal-close" @click="showAttackPlanner = false">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+          <div style="font-size:11px;color:var(--muted)">
+            Set an arrival time. Your troops will depart automatically
+            so they arrive exactly on schedule.
+          </div>
+
+          <!-- Target selection -->
+          <div>
+            <div class="modal-label" style="margin-bottom:6px">TARGET</div>
+            <div style="font-size:12px;color:var(--cyan)">
+              {{ plannerTarget
+                ? (plannerTarget.label ?? plannerTarget.name ?? plannerTarget.id)
+                : 'Select a POI or Settlement on the map first' }}
+            </div>
+          </div>
+
+          <!-- Arrival time -->
+          <div>
+            <div class="modal-label" style="margin-bottom:6px">ARRIVE AT</div>
+            <input type="datetime-local" v-model="plannerArrivalTime"
+                   style="background:var(--bg3);border:1px solid var(--border);
+                          color:var(--text);padding:8px 12px;font-family:var(--ff);
+                          font-size:11px;width:100%" />
+          </div>
+
+          <!-- Departure calculation -->
+          <div v-if="plannerDepartureTime"
+               style="padding:12px;background:var(--bg3);border:1px solid var(--border)">
+            <div class="modal-label" style="margin-bottom:4px">DEPARTURE</div>
+            <div style="font-size:13px;color:var(--cyan);font-family:var(--ff-title);font-weight:700">
+              {{ plannerDepartureTime }}
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">
+              Travel time: {{ formatTravelTime(plannerTravelSeconds) }}
+            </div>
+          </div>
+
+          <!-- Unit selection -->
+          <div v-if="plannerTarget">
+            <div class="modal-label" style="margin-bottom:8px">SELECT UNITS</div>
+            <div v-if="ownedUnits.length === 0" style="font-size:11px;color:var(--muted)">
+              No units available
+            </div>
+            <div v-for="u in ownedUnits" :key="u.name"
+                 style="display:flex;align-items:center;gap:10px;padding:6px 0;
+                        border-bottom:1px solid var(--border)">
+              <span style="flex:1;font-size:11px;color:var(--text)">{{ u.name }}</span>
+              <span style="font-size:10px;color:var(--muted)">{{ u.qty }} avail</span>
+              <button class="qty-btn" @click="plannerUnits[u.name] = Math.max(0, (plannerUnits[u.name]||0) - 1)">−</button>
+              <span style="width:30px;text-align:center;font-family:var(--ff-title);font-size:11px">
+                {{ plannerUnits[u.name] || 0 }}
+              </span>
+              <button class="qty-btn" @click="plannerUnits[u.name] = Math.min(u.qty, (plannerUnits[u.name]||0) + 1)">+</button>
+            </div>
+          </div>
+
+          <div v-if="plannerError" style="color:var(--red);font-size:11px">{{ plannerError }}</div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="modal-cancel" @click="showAttackPlanner = false">CANCEL</button>
+            <button class="modal-confirm"
+                    :disabled="!plannerTarget || !plannerArrivalTime || plannerDepartureInPast"
+                    @click="confirmPlannedAttack">
+              SCHEDULE ATTACK
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -876,6 +1007,102 @@ const claimedCount = computed(() => slots.value.filter(s => s.status !== 'empty'
 const labeledSlots = computed(() => slots.value.filter(s => s.status !== 'empty' || zoom.value > 1.3))
 const visiblePois = computed(() => pois.value.filter(p => p.discovered))
 
+const showMovementsPanel = ref(false)
+
+const activeOperations = computed(() =>
+  operations.value.filter(op =>
+    op.isOwn &&
+    op.phase !== 'completed' &&
+    !String(op.id).startsWith('local-')
+  )
+)
+
+function focusOperation(op) {
+  if (!op.destX || !op.destY) return
+  const targetX = -(op.destX * zoom.value) + cW.value / 2
+  const targetY = -(op.destY * zoom.value) + cH.value / 2
+  panX.value = targetX
+  panY.value = targetY
+  clampPan()
+  renderMap(); renderMini()
+  showMovementsPanel.value = false
+
+  if (op.poiId) {
+    const poi = pois.value.find(p => p.id === op.poiId)
+    if (poi) { selPoi.value = poi; sel.value = null }
+  }
+}
+
+const showAttackPlanner = ref(false)
+const plannerArrivalTime = ref('')
+const plannerUnits = ref({})
+const plannerError = ref('')
+
+const scoutMasterActive = computed(() =>
+  props.player?.advisors?.scoutMaster?.active ?? false
+)
+
+const plannerTarget = computed(() => selPoi.value ?? sel.value ?? null)
+
+const plannerTravelSeconds = computed(() => {
+  if (!plannerTarget.value) return 0
+  const own = slots.value.find(s => s.status === 'yours')
+  if (!own) return 0
+  const tx = plannerTarget.value.x ?? 0
+  const ty = plannerTarget.value.y ?? 0
+  const dist = Math.sqrt(Math.pow(tx - own.x, 2) + Math.pow(ty - own.y, 2))
+  return Math.max(30, Math.round(dist * 0.3))
+})
+
+const plannerDepartureTime = computed(() => {
+  if (!plannerArrivalTime.value || !plannerTravelSeconds.value) return null
+  const arrival = new Date(plannerArrivalTime.value).getTime()
+  const departure = arrival - plannerTravelSeconds.value * 1000
+  if (departure <= Date.now()) return null
+  return new Date(departure).toLocaleString()
+})
+
+const plannerDepartureInPast = computed(() => {
+  if (!plannerArrivalTime.value || !plannerTravelSeconds.value) return true
+  const arrival = new Date(plannerArrivalTime.value).getTime()
+  const departure = arrival - plannerTravelSeconds.value * 1000
+  return departure <= Date.now()
+})
+
+async function confirmPlannedAttack() {
+  if (!plannerTarget.value || !plannerArrivalTime.value) return
+  plannerError.value = ''
+
+  const units = Object.fromEntries(
+    Object.entries(plannerUnits.value).filter(([, v]) => v > 0)
+  )
+  if (Object.keys(units).length === 0) {
+    plannerError.value = 'Select at least 1 unit.'
+    return
+  }
+
+  const arrival = new Date(plannerArrivalTime.value).getTime()
+  const departureDelay = Math.max(0, arrival - plannerTravelSeconds.value * 1000 - Date.now())
+
+  setTimeout(async () => {
+    try {
+      if (selPoi.value) {
+        await attackPoi(props.settlement.id, selPoi.value.id, units, 'sweep', plannerTravelSeconds.value)
+      } else if (sel.value) {
+        await attackSettlement(props.settlement.id, sel.value.id, units, plannerTravelSeconds.value)
+      }
+      await loadOperations()
+    } catch (e) {
+      console.error('Scheduled attack failed', e)
+    }
+  }, departureDelay)
+
+  const departureStr = new Date(Date.now() + departureDelay).toLocaleTimeString()
+  alert(`Attack scheduled! Troops will depart at ${departureStr}.`)
+  showAttackPlanner.value = false
+  plannerUnits.value = {}
+}
+
 const router = useRouter()
 
 function openMailToSelected() {
@@ -1385,4 +1612,28 @@ onUnmounted(() => {
 .ps-enter-from,.ps-leave-to{transform:translateY(100%);opacity:0}
 .modal-fade-enter-active,.modal-fade-leave-active{transition:opacity .18s}
 .modal-fade-enter-from,.modal-fade-leave-to{opacity:0}
+.tb-movements{position:relative}
+.tb-movements-btn{position:relative}
+.tb-movements-btn--active{border-color:var(--cyan);background:rgba(0,212,255,.1);color:var(--cyan)}
+.movements-panel{position:absolute;top:calc(100% + 8px);right:0;width:300px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200}
+.movements-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(0,212,255,.06),transparent)}
+.movements-title{font-family:var(--ff-title);font-size:9px;color:var(--cyan);letter-spacing:2px;font-weight:700}
+.movements-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px}
+.movements-close:hover{color:var(--text)}
+.movements-empty{padding:16px;font-size:11px;color:var(--muted);text-align:center}
+.movement-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.movement-row:hover{background:rgba(0,212,255,.04)}
+.movement-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.movement-info{flex:1;min-width:0}
+.movement-target{font-size:11px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.movement-units{font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.movement-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+.movement-status{font-size:14px}
+.status--outbound{color:var(--cyan)}
+.status--arrived{color:var(--green)}
+.status--returning{color:#ffc840}
+.movement-time{font-family:var(--ff-title);font-size:10px;color:var(--cyan);font-weight:700}
+.tb-planner-btn{border-color:rgba(255,200,64,.4);color:#ffc840;background:rgba(255,200,64,.06);font-size:10px;letter-spacing:1px}
+.tb-planner-btn:hover{background:rgba(255,200,64,.15)}
+.wl-modal--wide{max-width:480px !important;width:94vw !important}
 </style>
