@@ -544,13 +544,25 @@ async function loadOperations() {
     const data = await getSettlementOperations(props.settlement.id)
     const newOps = (data || []).map(op => ({
       id: op.id,
-      phase: op.phase,
+      phase: (() => {
+        // If backend says outbound but arrival time is already past,
+        // treat as arrived on the client side immediately.
+        // This prevents stale old operations (from previous sessions)
+        // from briefly showing as outbound with 900%+ progress.
+        if (op.phase === 'outbound' && op.arrivesAtUtc) {
+          const arrivesAt = new Date(op.arrivesAtUtc).getTime()
+          if (Date.now() >= arrivesAt) return 'arrived'
+        }
+        return op.phase
+      })(),
       operationType: op.operationType,
       originX: 0, originY: 0,
       destX: 0, destY: 0,
       startTime: op.startedAtUtc
         ? new Date(op.startedAtUtc).getTime()
-        : new Date(op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000,
+        : op.arrivesAtUtc
+          ? new Date(op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000
+          : Date.now(),
       travelDuration: (op.travelSeconds ?? 60) * 1000,
       arrivesAtUtc: op.arrivesAtUtc,
       isOwn: op.isOwn,

@@ -318,7 +318,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: request.RareTechAmount,
                 raidMode: null,
-                travelSeconds: 60);
+                travelSeconds: Math.Max(30, Math.Min(86400, request.TravelSeconds)));
 
             var attackerPlayer = await _db.Players.FirstOrDefaultAsync(p => p.Id == attacker.PlayerId);
             var defenderPlayer = await _db.Players.FirstOrDefaultAsync(p => p.Id == defender.PlayerId);
