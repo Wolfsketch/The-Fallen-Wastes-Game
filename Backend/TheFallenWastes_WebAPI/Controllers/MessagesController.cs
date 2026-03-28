@@ -103,6 +103,19 @@ namespace TheFallenWastes_WebAPI.Controllers
             return Ok(new { Message = "Marked as read." });
         }
 
+        [HttpPost("mark-unread/{messageId}")]
+        public async Task<IActionResult> MarkAsUnread(Guid messageId)
+        {
+            var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == messageId);
+            if (message == null)
+                return NotFound("Message not found.");
+
+            message.MarkAsUnread();
+            await _db.SaveChangesAsync();
+
+            return Ok(new { success = true });
+        }
+
         [HttpGet("{playerId}/reports")]
         public async Task<IActionResult> GetReports(Guid playerId)
         {

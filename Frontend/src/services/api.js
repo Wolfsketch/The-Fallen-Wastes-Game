@@ -211,6 +211,11 @@ export async function markMessageAsRead(messageId) {
     return response.data
 }
 
+export async function markMessageAsUnread(messageId) {
+    const response = await api.post(`/Messages/mark-unread/${messageId}`)
+    return response.data
+}
+
 // Operations
 export async function getSettlementOperations(settlementId) {
     const response = await api.get(`/Operations/settlement/${settlementId}`)

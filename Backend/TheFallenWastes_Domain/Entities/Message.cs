@@ -31,5 +31,10 @@ namespace TheFallenWastes_Domain.Entities
         {
             IsRead = true;
         }
+
+        public void MarkAsUnread()
+        {
+            IsRead = false;
+        }
     }
 }

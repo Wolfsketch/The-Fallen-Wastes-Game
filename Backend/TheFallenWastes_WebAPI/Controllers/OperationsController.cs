@@ -90,12 +90,14 @@ namespace TheFallenWastes_WebAPI.Controllers
                     {
                         var npcUnits = GenerateNpcUnits(op.TargetPoiId ?? "unknown");
                         int tier = npcUnits.Values.Sum() > 20 ? 3 : npcUnits.Values.Sum() > 10 ? 2 : 1;
+                        var lootItems = GeneratePoiLoot(op.TargetPoiId ?? "unknown", tier);
                         var resultJson = JsonSerializer.Serialize(new
                         {
                             success = true,
                             poiId = op.TargetPoiId,
                             npcUnits,
-                            tier
+                            tier,
+                            lootItems
                         });
                         op.SetResult(resultJson);
 
@@ -622,7 +624,34 @@ namespace TheFallenWastes_WebAPI.Controllers
             return units;
         }
 
-        // ─── Travel time helper ──────────────────────────────────────────────
+        // ─── POI loot generation ────────────────────────────────────────────────────
+        // Deterministic: same poiId + tier always produces the same loot.
+        private static List<string> GeneratePoiLoot(string poiId, int tier)
+        {
+            int hash = Math.Abs(poiId.GetHashCode());
+            var pool = tier switch
+            {
+                1 => new[] {
+                    "Cracked Circuit Board", "Burned Power Cell",
+                    "Scrap Bundle", "Fractured Optics Module"
+                },
+                2 => new[] {
+                    "Damaged Servo Bundle", "Broken Drone Core",
+                    "Pre-War Guidance Chip", "Encrypted Datacore"
+                },
+                _ => new[] {
+                    "Ancient Data Core", "Prototype Schematic",
+                    "Reactor Fragment", "Vault Artifact"
+                }
+            };
+            int count = 2 + (hash % 3);
+            return Enumerable.Range(0, count)
+                .Select(i => pool[(hash + i * 7) % pool.Length])
+                .Distinct()
+                .ToList();
+        }
+
+        // ─── Travel time helper
         // TODO: wire originX/Y and destX/Y from settlement coordinates once added.
         // Formula: distance = sqrt((dx)^2 + (dy)^2); seconds = (int)(distance * 0.3);
         // World is 5400x4200. At distance 500 units → ~150s base. Clamped 30s–24h.

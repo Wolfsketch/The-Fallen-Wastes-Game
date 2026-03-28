@@ -142,8 +142,8 @@
               <span>{{ selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???' }}</span>
             </div></div>
             <div class="ss"><div class="ssl">LOOT</div><div class="ssv ssv--unknown">
-              <span>{{ selectedPoiScoutResult?.npcUnits
-                ? Object.entries(selectedPoiScoutResult.npcUnits).map(([k,v]) => v+'x '+k).join(', ')
+              <span>{{ selectedPoiScoutResult?.lootItems?.length
+                ? selectedPoiScoutResult.lootItems.join(', ')
                 : '???' }}</span>
             </div></div>
             <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available'">{{ arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE' }}</div></div>
@@ -234,17 +234,25 @@
     <div v-if="scoutReport" class="modal-backdrop" @click.self="scoutReport = null">
       <div class="wl-modal">
         <div class="modal-header">
-          <span class="modal-title">SCOUT REPORT — {{ scoutReport.poiId }}</span>
+          <span class="modal-title">SCOUT REPORT — {{ scoutReport.poiLabel ?? scoutReport.poiId }}</span>
           <button class="modal-close" @click="scoutReport = null">✕</button>
         </div>
         <div class="modal-body" style="padding:16px">
           <div style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:12px">
-            DETECTED UNITS — TIER {{ scoutReport.tier }}
+            DEFENDERS — TIER {{ scoutReport.tier }}
           </div>
           <div v-for="(qty, name) in scoutReport.npcUnits" :key="name"
                style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px">
             <span style="color:var(--text)">{{ name }}</span>
             <span style="color:var(--red);font-family:var(--ff-title);font-weight:700">× {{ qty }}</span>
+          </div>
+          <div v-if="scoutReport.lootItems?.length"
+               style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin:14px 0 8px">
+            SALVAGEABLE LOOT
+          </div>
+          <div v-for="item in (scoutReport.lootItems ?? [])" :key="item"
+               style="padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--green)">
+            🧬 {{ item }}
           </div>
         </div>
         <div class="modal-footer">
@@ -670,8 +678,10 @@ async function loadOperations() {
           if (result?.npcUnits) {
             scoutReport.value = {
               poiId: op.poiId,
+              poiLabel: op.poiLabel ?? op.poiId,
               npcUnits: result.npcUnits,
-              tier: result.tier ?? 1
+              tier: result.tier ?? 1,
+              lootItems: result.lootItems ?? []
             }
           }
         } catch {}

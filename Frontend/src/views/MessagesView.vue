@@ -53,7 +53,7 @@
               class="msg-list-item"
               :class="{
               'msg-list-item--active': selectedMessage?.id === msg.id && !composeMode,
-              'msg-list-item--unread': activeFolder === 'inbox' && !msg.isRead
+              'msg-list-item--unread': !msg.isRead
             }"
               @click="selectMessage(msg)"
           >
@@ -65,7 +65,7 @@
             </div>
 
             <div class="msg-subject">
-              <span v-if="activeFolder === 'inbox' && !msg.isRead" class="msg-unread-dot"></span>
+              <span v-if="!msg.isRead" class="msg-unread-dot"></span>
               <span v-if="getMessageIcon(msg)" class="msg-type-icon">{{ getMessageIcon(msg) }}</span>
               {{ msg.subject }}
             </div>
@@ -145,6 +145,11 @@
               <div class="content-sub">Encrypted settlement communication</div>
             </div>
             <button class="msg-delete-btn" @click="deleteCurrentMessage" title="Delete message">🗑 Delete</button>
+            <button class="msg-unread-btn"
+                    @click="toggleReadStatus(selectedMessage)"
+                    :title="selectedMessage?.isRead ? 'Mark as unread' : 'Mark as read'">
+              {{ selectedMessage?.isRead ? '● Unread' : '✓ Read' }}
+            </button>
           </div>
 
           <div class="detail-meta-grid">
@@ -210,6 +215,7 @@ import {
   searchPlayers,
   getUnreadMessageCount,
   markMessageAsRead,
+  markMessageAsUnread,
   getReportMessages,
   deleteMessage
 } from '../services/api.js'
@@ -323,6 +329,28 @@ async function deleteCurrentMessage() {
   }
 }
 
+async function toggleReadStatus(msg) {
+  if (!msg) return
+  try {
+    if (msg.isRead) {
+      await markMessageAsUnread(msg.id)
+      msg.isRead = false
+      const t = inboxMessages.value.find(m => m.id === msg.id)
+            ?? reportMessages.value.find(m => m.id === msg.id)
+            ?? sentMessages.value.find(m => m.id === msg.id)
+      if (t) t.isRead = false
+    } else {
+      await markMessageAsRead(msg.id)
+      msg.isRead = true
+      const t = inboxMessages.value.find(m => m.id === msg.id)
+            ?? reportMessages.value.find(m => m.id === msg.id)
+            ?? sentMessages.value.find(m => m.id === msg.id)
+      if (t) t.isRead = true
+    }
+    await emitUnreadRefresh()
+  } catch (e) { console.error('Toggle read failed', e) }
+}
+
 function getMessageIcon(msg) {
   const subject = (msg.subject ?? '').toLowerCase()
   const type = (msg.messageType ?? '').toLowerCase()
@@ -349,12 +377,13 @@ async function selectMessage(msg) {
   sendError.value = ''
   sendSuccess.value = ''
 
-  if (activeFolder.value === 'inbox' && !msg.isRead) {
+  if ((activeFolder.value === 'inbox' || activeFolder.value === 'reports') && !msg.isRead) {
     try {
       await markMessageAsRead(msg.id)
       msg.isRead = true
 
       const target = inboxMessages.value.find(m => m.id === msg.id)
+              ?? reportMessages.value.find(m => m.id === msg.id)
       if (target) target.isRead = true
 
       await emitUnreadRefresh()
@@ -797,6 +826,21 @@ watch(() => route.query, () => {
 
 .msg-delete-btn:hover {
   background: rgba(255,48,64,.18);
+}
+
+.msg-unread-btn {
+  background: rgba(0,212,255,.06);
+  border: 1px solid rgba(0,212,255,.3);
+  color: var(--cyan);
+  padding: 5px 12px;
+  cursor: pointer;
+  font-family: var(--ff);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.msg-unread-btn:hover {
+  background: rgba(0,212,255,.15);
 }
 
 .content-title {
