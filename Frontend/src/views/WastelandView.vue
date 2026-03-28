@@ -7,11 +7,14 @@
       </div>
       <div class="tb-center">[ {{ viewX }}, {{ viewY }} ] — {{ claimedCount }}/{{ slots.length }} claimed</div>
       <div class="tb-right">
-        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0">
+        <div class="tb-movements" v-if="operations.value?.length > 0 || activeOperations.length > 0">
           <button class="tb-btn tb-movements-btn"
                   @click="showMovementsPanel = !showMovementsPanel"
                   :class="{ 'tb-movements-btn--active': showMovementsPanel }">
-            ⚡ {{ activeOperations.length }}
+            <span style="font-size:11px">⚡</span>
+            <span style="font-size:11px;font-family:var(--ff-title);font-weight:700">
+              {{ allMovements.length }}
+            </span>
           </button>
 
           <div v-if="showMovementsPanel" class="movements-panel">
@@ -20,34 +23,68 @@
               <button class="movements-close" @click="showMovementsPanel = false">✕</button>
             </div>
 
-            <div v-if="activeOperations.length === 0" class="movements-empty">
-              No active movements
-            </div>
+            <div class="movements-list">
+              <!-- ONDERWEG -->
+              <template v-if="allMovements.filter(o => o.phase === 'outbound').length > 0">
+                <div class="movements-section-title">ONDERWEG →</div>
+                <div v-for="op in allMovements.filter(o => o.phase === 'outbound')"
+                     :key="op.id" class="movement-row" @click="focusOperation(op)">
+                  <div class="movement-icon">
+                    {{ op.operationType?.includes('scout') ? '👁' : op.operationType === 'reinforce_poi' ? '⛊' : '⚔' }}
+                  </div>
+                  <div class="movement-info">
+                    <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
+                    <div class="movement-units">{{ op.operationType?.includes('scout') ? 'Scout' : (op.unitSummary ?? '—') }}</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status status--outbound">→</div>
+                    <div class="movement-time">
+                      {{ formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000))) }}
+                    </div>
+                  </div>
+                </div>
+              </template>
 
-            <div v-for="op in activeOperations" :key="op.id" class="movement-row"
-                 @click="focusOperation(op)">
-              <div class="movement-icon">
-                {{ op.operationType === 'scout_poi' || op.operationType === 'scout_settlement' ? '👁'
-                  : op.operationType === 'reinforce_poi' ? '⛊'
-                  : op.isReinforcement ? '⛊'
-                  : '⚔' }}
-              </div>
-              <div class="movement-info">
-                <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
-                <div class="movement-units">{{ op.unitSummary ?? (op.operationType?.includes('scout') ? 'Scout' : '—') }}</div>
-              </div>
-              <div class="movement-right">
-                <div class="movement-status"
-                     :class="op.phase === 'outbound' ? 'status--outbound' : op.phase === 'arrived' ? 'status--arrived' : 'status--returning'">
-                  {{ op.phase === 'outbound' ? '→' : op.phase === 'arrived' ? '●' : '←' }}
+              <!-- AANWEZIG (enkel troepen, geen scouts) -->
+              <template v-if="allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout')).length > 0">
+                <div class="movements-section-title">AANWEZIG ●</div>
+                <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout'))"
+                     :key="op.id" class="movement-row" @click="focusOperation(op)">
+                  <div class="movement-icon">{{ op.operationType === 'reinforce_poi' ? '⛊' : '⚔' }}</div>
+                  <div class="movement-info">
+                    <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
+                    <div class="movement-units">{{ op.unitSummary ?? '—' }}</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status status--arrived">●</div>
+                    <div class="movement-time" style="color:var(--green)">ACTIEF</div>
+                  </div>
                 </div>
-                <div class="movement-time">
-                  {{ op.phase === 'outbound'
-                    ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000)))
-                    : op.phase === 'arrived' ? 'ACTIVE'
-                    : op.returnsAtUtc ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.returnsAtUtc).getTime() - Date.now()) / 1000)))
-                    : '—' }}
+              </template>
+
+              <!-- TERUGKEREND -->
+              <template v-if="allMovements.filter(o => o.phase === 'returning').length > 0">
+                <div class="movements-section-title">TERUG ←</div>
+                <div v-for="op in allMovements.filter(o => o.phase === 'returning')"
+                     :key="op.id" class="movement-row" @click="focusOperation(op)">
+                  <div class="movement-icon">{{ op.operationType?.includes('scout') ? '👁' : '⚔' }}</div>
+                  <div class="movement-info">
+                    <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
+                    <div class="movement-units">{{ op.unitSummary ?? '—' }}</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status status--returning">←</div>
+                    <div class="movement-time" style="color:#ffc840">
+                      {{ op.returnsAtUtc
+                        ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.returnsAtUtc).getTime() - Date.now()) / 1000)))
+                        : '—' }}
+                    </div>
+                  </div>
                 </div>
+              </template>
+
+              <div v-if="allMovements.length === 0" class="movements-empty">
+                Geen actieve bewegingen
               </div>
             </div>
           </div>
@@ -60,8 +97,24 @@
           📋 PLANNER
         </button>
 
+        <div class="tb-movements">
+          <button class="tb-btn tb-notes-btn" @click="showNotes = !showNotes" title="Notities">
+            📋
+          </button>
+
+          <div v-if="showNotes" class="notes-panel">
+            <div class="movements-header">
+              <span class="movements-title">NOTITIES</span>
+              <button class="movements-close" @click="showNotes = false">✕</button>
+            </div>
+            <textarea class="notes-textarea"
+                      v-model="notesContent"
+                      placeholder="Schrijf hier je notities..."
+                      @input="saveNotes"></textarea>
+          </div>
+        </div>
+
         <button class="tb-btn" @click="centerOnPlayer">⊕</button>
-        <button class="tb-btn" @click="zoomIn" :disabled="zoom >= 3">+</button>
         <span class="tb-zoom">{{ Math.round(zoom * 100) }}%</span>
         <button class="tb-btn" @click="zoomOut" :disabled="zoom <= minZoom">−</button>
       </div>
@@ -99,6 +152,14 @@
         </template>
         <!-- Stippen: ENKEL eigen (cyaan) + alliantie (paars). Neutraal/vijand onzichtbaar. -->
         <div v-for="op in activeOperationMarkers" :key="'op-' + op.id" class="op-dot" :class="{ 'op-dot--own': op.isOwn, 'op-dot--alliance': !op.isOwn && op.isAlliance }" :style="{ left: op.x + 'px', top: op.y + 'px' }" />
+        <!-- Bewegingstimers op de kaart boven de dots -->
+        <div v-for="op in activeOperationMarkers" :key="'timer-' + op.id"
+             class="op-timer"
+             :style="{ left: op.x + 'px', top: (op.y - 24) + 'px' }">
+          {{ formatTravelTime(Math.max(0, Math.ceil(
+              (new Date(op.arrivesAtUtc ?? 0).getTime() - Date.now()) / 1000
+          ))) }}
+        </div>
       </div>
       <div class="minimap">
         <div class="mm-t">RADAR — {{ worldName }}</div>
@@ -196,7 +257,7 @@
             </div></div>
             <div class="ss"><div class="ssl">LOOT</div><div class="ssv ssv--unknown">
               <span>{{ selectedPoiScoutResult?.lootItems?.length
-                ? selectedPoiScoutResult.lootItems.join(', ')
+                ? selectedPoiScoutResult.lootItems.length + ' items'
                 : '???' }}</span>
             </div></div>
             <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available'">{{ arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE' }}</div></div>
@@ -547,6 +608,7 @@ const arrivedPoiIds = computed(() =>
       .filter(op =>
         op.phase === 'arrived' &&
         op.poiId &&
+        !String(op.id).startsWith('local-') &&
         (op.operationType === 'raid_poi' || op.operationType === 'reinforce_poi')
       )
       .map(op => op.poiId)
@@ -936,11 +998,14 @@ async function confirmAttack() {
       await attackSettlement(props.settlement.id, sel.value.id, units,
                              estimatedTravelSeconds.value ?? 120)
     }
+    const _wasReinforce = modal.isReinforce ?? false
+    const _type = modal.type
+    const _raidMode = modal.raidMode
     attackModal.value.open = false
 
     const ownSlotA = slots.value.find(s => s.status === 'yours')
-    const targetPoiA = attackModal.value.type === 'poi' ? selPoi.value : null
-    const targetSlotA = attackModal.value.type === 'settlement' ? sel.value : null
+    const targetPoiA = _type === 'poi' ? selPoi.value : null
+    const targetSlotA = _type === 'settlement' ? sel.value : null
     if (ownSlotA && (targetPoiA || targetSlotA)) {
       const travelMs = (estimatedTravelSeconds.value ?? 300) * 1000
       const destX = targetPoiA ? targetPoiA.x : (targetSlotA?.x ?? 0)
@@ -948,7 +1013,7 @@ async function confirmAttack() {
       operations.value.push({
         id: 'local-attack-' + Date.now(),
         phase: 'outbound',
-        operationType: modal.isReinforce ? 'reinforce_poi' : 'raid_poi',
+        operationType: _wasReinforce ? 'reinforce_poi' : 'raid_poi',
         originX: ownSlotA.x, originY: ownSlotA.y,
         destX, destY,
         startTime: Date.now(),
@@ -962,7 +1027,7 @@ async function confirmAttack() {
         unitSummary: Object.entries(modal.selectedUnits ?? {})
           .filter(([, v]) => v > 0)
           .map(([k, v]) => `${v}x ${k}`).join(', '),
-        isReinforcement: modal.isReinforce ?? false,
+        isReinforcement: _wasReinforce,
         resultJson: null,
         lootItemsEarned: 0,
         lootIntervalSeconds: 300,
@@ -991,12 +1056,13 @@ async function recallTroops(op) {
   if (!op || !props.settlement?.id) return
   try {
     const result = await recallOperation(props.settlement.id, op.id)
-    alert(result.message ?? 'Troops returning.')
+    const toastMsg = result.message ?? 'Troops returning.'
+    console.log('[RECALL]', toastMsg)
     await loadOperations()
     if (props.refreshSettlement) await props.refreshSettlement()
   } catch (err) {
     const msg = err?.response?.data
-    alert(typeof msg === 'string' ? msg : 'Recall failed.')
+    console.error('[RECALL FAILED]', msg)
   }
 }
 
@@ -1014,6 +1080,40 @@ const activeOperations = computed(() =>
     op.isOwn &&
     op.phase !== 'completed' &&
     !String(op.id).startsWith('local-')
+  )
+)
+
+const troopOperations = computed(() =>
+  activeOperations.value.filter(op =>
+    op.operationType === 'raid_poi' ||
+    op.operationType === 'attack_settlement' ||
+    op.operationType === 'reinforce_poi'
+  )
+)
+
+// Includes local ops (recent dispatches not yet confirmed by backend)
+const allMovements = computed(() => {
+  const backendPoiOps = new Set(
+    activeOperations.value.map(o => o.poiId + '|' + o.operationType)
+  )
+  const localOps = operations.value.filter(op =>
+    op.isOwn &&
+    op.phase === 'outbound' &&
+    String(op.id).startsWith('local-') &&
+    !backendPoiOps.has(op.poiId + '|' + op.operationType)
+  )
+  return [...activeOperations.value, ...localOps]
+    .sort((a, b) => {
+      const order = { outbound: 0, arrived: 1, returning: 2 }
+      return (order[a.phase] ?? 3) - (order[b.phase] ?? 3)
+    })
+})
+
+const troopMovements = computed(() =>
+  allMovements.value.filter(op =>
+    op.operationType === 'raid_poi' ||
+    op.operationType === 'attack_settlement' ||
+    op.operationType === 'reinforce_poi'
   )
 )
 
@@ -1037,6 +1137,13 @@ const showAttackPlanner = ref(false)
 const plannerArrivalTime = ref('')
 const plannerUnits = ref({})
 const plannerError = ref('')
+
+const showNotes = ref(false)
+const notesContent = ref(localStorage.getItem('wasteland-notes') ?? '')
+
+function saveNotes() {
+  try { localStorage.setItem('wasteland-notes', notesContent.value) } catch {}
+}
 
 const scoutMasterActive = computed(() =>
   props.player?.advisors?.scoutMaster?.active ?? false
@@ -1613,9 +1720,16 @@ onUnmounted(() => {
 .modal-fade-enter-active,.modal-fade-leave-active{transition:opacity .18s}
 .modal-fade-enter-from,.modal-fade-leave-to{opacity:0}
 .tb-movements{position:relative}
-.tb-movements-btn{position:relative}
+.tb-movements-btn{position:relative;width:auto !important;padding:0 10px;gap:5px;font-size:11px;letter-spacing:0.5px}
 .tb-movements-btn--active{border-color:var(--cyan);background:rgba(0,212,255,.1);color:var(--cyan)}
-.movements-panel{position:absolute;top:calc(100% + 8px);right:0;width:300px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200}
+.op-timer{position:absolute;transform:translate(-50%,-100%);background:rgba(0,0,0,.85);border:1px solid var(--cyan);color:var(--cyan);font-family:var(--ff-title);font-size:9px;font-weight:700;padding:2px 6px;white-space:nowrap;pointer-events:none;letter-spacing:0.5px}
+.notes-panel{position:absolute;top:calc(100% + 8px);right:0;width:300px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200;display:flex;flex-direction:column}
+.notes-textarea{width:100%;height:200px;background:var(--bg3);border:none;border-top:1px solid var(--border);color:var(--text);font-family:var(--ff);font-size:11px;padding:12px;resize:none;outline:none;line-height:1.6;box-sizing:border-box}
+.notes-textarea::placeholder{color:var(--muted)}
+.tb-notes-btn{position:relative}
+.movements-panel{position:absolute;top:calc(100% + 8px);right:0;width:320px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200;display:flex;flex-direction:column;max-height:420px}
+.movements-list{overflow-y:auto;flex:1;max-height:340px}
+.movements-section-title{padding:6px 14px;font-size:8px;color:var(--cyan);letter-spacing:2px;font-family:var(--ff-title);font-weight:700;background:rgba(0,212,255,.04);border-bottom:1px solid var(--border);border-top:1px solid var(--border)}
 .movements-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(0,212,255,.06),transparent)}
 .movements-title{font-family:var(--ff-title);font-size:9px;color:var(--cyan);letter-spacing:2px;font-weight:700}
 .movements-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px}
