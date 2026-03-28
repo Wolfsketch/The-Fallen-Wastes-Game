@@ -81,9 +81,10 @@ export async function upgradeBuilding(settlementId, buildingType) {
     return response.data
 }
 
-export async function cancelBuilding(settlementId, buildingType) {
+export async function cancelBuilding(settlementId, buildingType, targetLevel) {
     const response = await api.post(`/Settlements/${settlementId}/buildings/cancel`, {
-        buildingType
+        buildingType,
+        ...(targetLevel != null ? { targetLevel } : {})
     })
     return response.data
 }
@@ -210,6 +211,46 @@ export async function markMessageAsRead(messageId) {
     return response.data
 }
 
+// Operations
+export async function getSettlementOperations(settlementId) {
+    const response = await api.get(`/Operations/settlement/${settlementId}`)
+    return response.data
+}
 
+export async function scoutPoi(settlementId, targetPoiId, rareTechAmount) {
+    const response = await api.post(`/Operations/settlement/${settlementId}/scout-poi`,
+        { targetPoiId, rareTechAmount })
+    return response.data
+}
+
+export async function scoutSettlement(settlementId, targetSettlementId, rareTechAmount) {
+    const response = await api.post(`/Operations/settlement/${settlementId}/scout-settlement`,
+        { targetSettlementId, rareTechAmount })
+    return response.data
+}
+
+export async function attackPoi(settlementId, targetPoiId, units, raidMode) {
+    const response = await api.post(`/Operations/settlement/${settlementId}/attack-poi`,
+        { targetPoiId, units, raidMode })
+    return response.data
+}
+
+export async function attackSettlement(settlementId, targetSettlementId, units) {
+    const response = await api.post(`/Operations/settlement/${settlementId}/attack-settlement`,
+        { targetSettlementId, units })
+    return response.data
+}
+
+export async function reinforcePoi(settlementId, targetPoiId, units) {
+    const response = await api.post(`/Operations/settlement/${settlementId}/reinforce-poi`,
+        { targetPoiId, units })
+    return response.data
+}
+
+// Reports
+export async function getReportMessages(playerId) {
+    const response = await api.get(`/Messages/${playerId}/reports`)
+    return response.data
+}
 
 export default api

@@ -435,7 +435,6 @@ import rustBuggyImg from '../images/Rust Buggy.png'
 import warRigImg from '../images/War Rig.png'
 import interceptorImg from '../images/Interceptor.png'
 import siegeCarrierImg from '../images/Siege Carrier.png'
-import scoutDroneImg from '../images/Scout Drone.png'
 import convoyImg from '../images/Convoy.png'
 import wallBreakerImg from '../images/Wall Breaker.png'
 
@@ -534,7 +533,6 @@ const unitImages = {
   'War Rig': warRigImg,
   Interceptor: interceptorImg,
   'Siege Carrier': siegeCarrierImg,
-  'Scout Drone': scoutDroneImg,
   Convoy: convoyImg,
   'Wall Breaker': wallBreakerImg
 }

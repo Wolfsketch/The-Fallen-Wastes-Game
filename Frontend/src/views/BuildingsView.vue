@@ -89,43 +89,56 @@
     </div>
 
     <!-- Cancel confirmation modal -->
-    <div v-if="confirmCancel" class="cancel-overlay">
+    <div v-if="confirmCancel" class="cancel-overlay" @click.self="closeCancelConfirm">
       <div class="cancel-card">
-        <div class="cancel-header">
-          <div class="cancel-title">Confirm cancellation</div>
-          <button class="modal-close" @click="closeCancelConfirm">✕</button>
-        </div>
+        <div class="cancel-accent" />
+        <div class="cancel-inner">
 
-        <div class="cancel-body">
-          <div class="cancel-line"><strong>{{ confirmCancel.displayName }}</strong></div>
-          <div class="cancel-line">Target: L{{ confirmCancel.toLevel ?? confirmCancel.targetLevel }}</div>
-          <div class="cancel-line">Status: <em>{{ confirmCancel.isActive ? 'ACTIVE' : (confirmCancel.isWaiting ? 'WAITING' : confirmCancel.status) }}</em></div>
+          <div class="cancel-header">
+            <div class="cancel-header-text">
+              <div class="cancel-title">CONFIRM CANCELLATION</div>
+              <div class="cancel-subtitle">{{ confirmCancel.displayName }}</div>
+            </div>
+            <button class="cancel-close" @click="closeCancelConfirm">✕</button>
+          </div>
 
-          <div v-if="refundPreview(confirmCancel.cost)" class="cancel-refund">
-            <div class="cancel-refund-title">Refund preview (75%):</div>
-            <div class="cancel-refund-list">
+          <div class="cancel-meta">
+            <div class="cancel-meta-row">
+              <span class="cancel-meta-label">TARGET LEVEL</span>
+              <span class="cancel-meta-val">L{{ confirmCancel.toLevel ?? confirmCancel.targetLevel }}</span>
+            </div>
+            <div class="cancel-meta-row">
+              <span class="cancel-meta-label">STATUS</span>
+              <span class="cancel-meta-val" :class="confirmCancel.isActive ? 'status--active' : 'status--waiting'">
+                {{ confirmCancel.isActive ? 'ACTIVE' : 'WAITING' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="refundPreview(confirmCancel.cost)" class="cancel-refund-box">
+            <div class="cancel-refund-title">REFUND PREVIEW — 75%</div>
+            <div class="cancel-refund-grid">
               <div v-for="r in refundPreview(confirmCancel.cost)" :key="r.label" class="cancel-refund-item">
-                <span class="refund-label">{{ r.label }}</span>
-                <span class="refund-val">{{ r.amount }}</span>
+                <span class="refund-icon-label">{{ r.label }}</span>
+                <span class="refund-amount">+{{ r.amount }}</span>
               </div>
             </div>
           </div>
 
-          <div v-else class="cancel-refund-warning">
-            Exact refund preview unavailable for active item.
+          <div class="cancel-note" v-if="confirmCancel.isWaiting">
+            Removes queued item in reverse order (highest level first). 75% of resources will be returned.
+          </div>
+          <div class="cancel-note" v-else-if="confirmCancel.isActive">
+            Active construction will be stopped. 75% of resources will be returned.
           </div>
 
-          <div v-if="confirmCancel.isWaiting" class="cancel-note">
-            Queued upgrade cancelled. Removes queued items in reverse order (highest level first). ~75% resources refunded.
+          <div class="cancel-actions">
+            <button class="cancel-btn-confirm" @click="(async ()=>{ await cancelQueueItem(confirmCancel); closeCancelConfirm(); })()">
+              CONFIRM CANCEL
+            </button>
+            <button class="cancel-btn-abort" @click="closeCancelConfirm">ABORT</button>
           </div>
-          <div v-else-if="confirmCancel.isActive" class="cancel-note">
-            Active construction cancelled. ~75% resources refunded.
-          </div>
-        </div>
 
-        <div class="cancel-actions">
-          <button class="btn btn-danger" @click="(async ()=>{ await cancelQueueItem(confirmCancel); closeCancelConfirm(); })()">Confirm Cancel</button>
-          <button class="btn" @click="closeCancelConfirm">Abort</button>
         </div>
       </div>
     </div>
@@ -266,7 +279,7 @@ const showCommanderInfo = ref(false)
 const commanderActive = computed(() => commanderActiveState.value)
 // Number of currently active/constructing slots (used to show active slots vs waiting)
 const activeCount = computed(() => queueItems.value.filter(q => q.isActive).length)
-const queueFull = computed(() => activeCount.value >= queueLimit.value)
+const queueFull = computed(() => queueItems.value.length >= queueLimit.value)
 
 const categories = [
   { key: 'all', label: 'ALL' },
@@ -669,7 +682,10 @@ async function cancelQueueItem(arg) {
         throw new Error('Unable to determine queue item to cancel')
       }
     } else {
-      await cancelBuilding(props.settlement.id, buildingType)
+      const targetLvl = typeof arg === 'object'
+        ? (arg.toLevel ?? arg.targetLevel ?? null)
+        : null
+      await cancelBuilding(props.settlement.id, buildingType, targetLvl)
       await fetchBuildings()
     }
 
@@ -677,7 +693,8 @@ async function cancelQueueItem(arg) {
       await props.refreshSettlement()
     }
   } catch (err) {
-    error.value = err?.response?.data || 'Cancel failed.'
+    const msg = err?.response?.data
+    error.value = typeof msg === 'string' ? msg : (msg?.message ?? 'Cancel failed.')
   }
 }
 
@@ -1015,32 +1032,96 @@ onUnmounted(() => {
   border: 1px solid rgba(255,96,64,.15);
 }
 
-/* Cancel confirmation modal styles (small, using existing palette) */
+/* Cancel confirmation modal */
 .cancel-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,.6);
-  z-index: 1200;
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.85); z-index: 1200;
 }
 .cancel-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
-  padding: 16px;
-  width: 380px;
-  box-shadow: 0 0 40px rgba(0,0,0,.6);
+  border: 1px solid var(--border-bright);
+  width: 460px; max-width: 94vw;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(255,96,64,.08);
 }
-.cancel-header { display: flex; align-items: center; gap: 8px }
-.cancel-title { font-weight: 700; color: var(--cyan); font-family: var(--ff-title) }
-.cancel-body { margin-top: 12px }
-.cancel-line { margin-bottom: 6px; color: var(--muted) }
-.cancel-refund { margin-top: 8px; padding: 8px; background: var(--bg3); border: 1px solid var(--border) }
-.cancel-refund-list { display: flex; gap: 8px; flex-wrap: wrap }
-.cancel-refund-item { font-size: 12px; color: var(--cyan) }
-.cancel-note { margin-top: 10px; font-size: 12px; color: var(--muted) }
-.cancel-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px }
-.btn { padding: 8px 12px; border: 1px solid var(--border); background: transparent; cursor: pointer }
-.btn-danger { background: rgba(255,96,64,.06); border-color: rgba(255,96,64,.18); color: #ff6040 }
+.cancel-accent {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff6040, transparent);
+}
+.cancel-inner { padding: 28px 32px; }
+.cancel-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 12px;
+  margin-bottom: 24px;
+}
+.cancel-title {
+  font-size: 8px; color: #ff6040;
+  font-family: var(--ff-title); letter-spacing: 3px; font-weight: 700;
+  margin-bottom: 6px;
+}
+.cancel-subtitle {
+  font-size: 18px; color: var(--text);
+  font-family: var(--ff-title); font-weight: 700; letter-spacing: 1px;
+}
+.cancel-close {
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer;
+  padding: 4px 12px; font-size: 11px; font-family: var(--ff);
+  flex-shrink: 0;
+}
+.cancel-close:hover { border-color: #ff6040; color: #ff6040; }
+.cancel-meta {
+  display: flex; gap: 24px; margin-bottom: 20px;
+  padding-bottom: 20px; border-bottom: 1px solid var(--border);
+}
+.cancel-meta-row { display: flex; flex-direction: column; gap: 4px; }
+.cancel-meta-label {
+  font-size: 8px; color: var(--muted);
+  font-family: var(--ff-title); letter-spacing: 2px;
+}
+.cancel-meta-val {
+  font-size: 13px; color: var(--text);
+  font-family: var(--ff-title); font-weight: 700;
+}
+.status--active { color: #ff6040; }
+.status--waiting { color: var(--cyan); }
+.cancel-refund-box {
+  background: var(--bg3); border: 1px solid var(--border);
+  padding: 14px 16px; margin-bottom: 16px;
+}
+.cancel-refund-title {
+  font-size: 8px; color: var(--cyan);
+  font-family: var(--ff-title); letter-spacing: 2px; font-weight: 700;
+  margin-bottom: 12px;
+}
+.cancel-refund-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+.cancel-refund-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
+  min-width: 80px;
+}
+.refund-icon-label { font-size: 10px; color: var(--muted); }
+.refund-amount { font-size: 14px; color: var(--green); font-family: var(--ff-title); font-weight: 700; }
+.cancel-note {
+  font-size: 11px; color: var(--muted); line-height: 1.6;
+  margin-bottom: 20px;
+}
+.cancel-actions { display: flex; gap: 10px; }
+.cancel-btn-confirm {
+  flex: 1; padding: 12px;
+  background: rgba(255,96,64,.1); border: 1px solid #ff6040;
+  color: #ff6040; font-family: var(--ff-title); font-size: 11px;
+  font-weight: 700; letter-spacing: 2px; cursor: pointer;
+  transition: all .2s;
+}
+.cancel-btn-confirm:hover { background: rgba(255,96,64,.2); }
+.cancel-btn-abort {
+  flex: 1; padding: 12px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--ff-title); font-size: 11px;
+  font-weight: 700; letter-spacing: 2px; cursor: pointer;
+  transition: all .2s;
+}
+.cancel-btn-abort:hover { border-color: var(--cyan-dim); color: var(--cyan); }
 </style>

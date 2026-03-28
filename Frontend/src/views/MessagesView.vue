@@ -31,10 +31,16 @@
             SENT
             <span class="sidebar-count">{{ sentMessages.length }}</span>
           </button>
+
+          <button :class="['sidebar-tab', { 'sidebar-tab--active': activeFolder === 'reports' }]"
+                  @click="activeFolder = 'reports'">
+            📋 Reports
+            <span class="sidebar-count">{{ reportMessages.length }}</span>
+          </button>
         </div>
 
         <div v-if="activeMessages.length === 0" class="msg-list-empty">
-          {{ activeFolder === 'inbox' ? 'No messages received.' : 'No sent messages.' }}
+          {{ activeFolder === 'reports' ? 'No battle or scout reports yet.' : (activeFolder === 'inbox' ? 'No messages received.' : 'No sent messages.') }}
         </div>
 
         <div v-else class="msg-list">
@@ -205,6 +211,7 @@ const route = useRoute()
 
 const inboxMessages = ref([])
 const sentMessages = ref([])
+const reportMessages = ref([])
 const activeFolder = ref('inbox')
 
 const selectedMessage = ref(null)
@@ -227,6 +234,7 @@ const compose = ref({
 })
 
 const activeMessages = computed(() => {
+  if (activeFolder.value === 'reports') return reportMessages.value
   return activeFolder.value === 'inbox' ? inboxMessages.value : sentMessages.value
 })
 
@@ -262,8 +270,17 @@ async function loadSent() {
   }
 }
 
+async function loadReports() {
+  try {
+    // TODO: replace with real API call when backend reports endpoint exists
+    reportMessages.value = []
+  } catch {
+    reportMessages.value = []
+  }
+}
+
 async function loadAllMessages() {
-  await Promise.all([loadInbox(), loadSent()])
+  await Promise.all([loadInbox(), loadSent(), loadReports()])
   await emitUnreadRefresh()
 }
 

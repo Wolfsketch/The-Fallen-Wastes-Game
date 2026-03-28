@@ -104,7 +104,7 @@
           <template v-if="sel.status === 'neutral' || sel.status === 'enemy'">
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv" :class="ownerColor(sel.status)">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div><div class="ss"><div class="ssl">DEF</div><div class="ssv">{{ sel.defense }}</div></div></div>
             <div class="sp-actions">
-              <div class="sa-w"><button class="sa sa--a">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button></div>
+              <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button></div>
               <div class="sa-w sa-w--diplo">
                 <button class="sa sa--m" @click="openMailToSelected">✉ Mail</button>
                 <button v-if="sel.status !== 'enemy'" class="sa sa--e" @click="markAs('Enemy')">⚔ Enemy</button>
@@ -152,7 +152,8 @@
           <div class="sp-actions">
             <div class="sa-w">
               <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
-              <button class="sa sa--raid" @click="openRaidModal">⚔ Raid</button>
+              <button class="sa sa--raid" @click="openAttackModal('poi')">⚔ Raid</button>
+              <button v-if="selectedPoiHasNonOwnArrival" class="sa sa--reinforce" @click="openReinforceModal">⛊ Reinforce</button>
             </div>
           </div>
         </div>
@@ -182,31 +183,57 @@
                 <div class="modal-hint">Available: {{ currentRareTech }} RT</div>
               </div>
             </template>
+            <div v-if="scoutError" class="modal-error-msg">{{ scoutError }}</div>
           </div>
           <div class="modal-footer"><button class="modal-cancel" @click="scoutModal.open = false">CANCEL</button><button class="modal-confirm" @click="confirmScout">SEND SCOUT</button></div>
         </div>
       </div>
     </transition>
 
-    <!-- Raid modal -->
+    <!-- Attack / Reinforce modal -->
     <transition name="modal-fade">
-      <div v-if="raidModal.open" class="modal-backdrop" @click.self="raidModal.open = false">
-        <div class="modal-box">
-          <div class="modal-header"><span class="modal-title">RAID — {{ selPoi?.label }}</span><button class="modal-close" @click="raidModal.open = false">✕</button></div>
+      <div v-if="attackModal.open" class="modal-backdrop" @click.self="attackModal.open = false">
+        <div class="modal-box modal-box--wide">
+          <div class="modal-header">
+            <span class="modal-title">{{ attackModal.isReinforce ? 'REINFORCE' : 'DEPLOY FORCES' }}</span>
+            <button class="modal-close" @click="attackModal.open = false">✕</button>
+          </div>
           <div class="modal-body">
-            <div class="modal-info">Send troops to raid. NPC defenders engage on arrival. Scout first to assess threat level.</div>
-            <div class="modal-row">
+            <div class="modal-target">Target: <strong>{{ attackModal.type === 'poi' ? selPoi?.label : sel?.name }}</strong></div>
+            <div v-if="attackModal.type === 'poi' && !attackModal.isReinforce" class="modal-row">
               <label class="modal-label">OPERATION MODE</label>
               <div class="modal-op-grid">
-                <button v-for="mode in raidModes" :key="mode.key" class="modal-op-btn" :class="{ 'modal-op-btn--active': raidModal.mode === mode.key }" @click="raidModal.mode = mode.key">
+                <button v-for="mode in raidModes" :key="mode.key" class="modal-op-btn" :class="{ 'modal-op-btn--active': attackModal.raidMode === mode.key }" @click="attackModal.raidMode = mode.key">
                   <span class="modal-op-name">{{ mode.name }}</span>
                   <span class="modal-op-time">{{ mode.duration }}</span>
                   <span class="modal-op-desc">{{ mode.desc }}</span>
                 </button>
               </div>
             </div>
+            <div class="modal-row">
+              <label class="modal-label">SELECT UNITS</label>
+              <div v-if="ownedUnits.length === 0" class="modal-hint">No units available in inventory.</div>
+              <div v-else class="modal-unit-list">
+                <div v-for="u in ownedUnits" :key="u.name" class="modal-unit-row">
+                  <span class="modal-unit-name">{{ u.name }}</span>
+                  <span class="modal-unit-avail">{{ u.qty }} avail</span>
+                  <div class="modal-input-row">
+                    <button class="qty-btn" @click="attackModal.selectedUnits[u.name] = Math.max(0, (attackModal.selectedUnits[u.name] || 0) - 1)">−</button>
+                    <input class="modal-input modal-input--sm" type="number" min="0" :max="u.qty"
+                           :value="attackModal.selectedUnits[u.name] || 0"
+                           @input="attackModal.selectedUnits[u.name] = Math.min(u.qty, Math.max(0, +$event.target.value))" />
+                    <button class="qty-btn" @click="attackModal.selectedUnits[u.name] = Math.min(u.qty, (attackModal.selectedUnits[u.name] || 0) + 1)">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-hint">Total selected: {{ Object.values(attackModal.selectedUnits).reduce((s, v) => s + (v || 0), 0) }}</div>
+            </div>
+            <div v-if="attackModal.error" class="modal-error-msg">{{ attackModal.error }}</div>
           </div>
-          <div class="modal-footer"><button class="modal-cancel" @click="raidModal.open = false">CANCEL</button><button class="modal-confirm" @click="confirmRaid">DEPLOY TROOPS</button></div>
+          <div class="modal-footer">
+            <button class="modal-cancel" @click="attackModal.open = false">CANCEL</button>
+            <button class="modal-confirm" @click="confirmAttack">SEND FORCES</button>
+          </div>
         </div>
       </div>
     </transition>
@@ -217,7 +244,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
-import { getWorldSettlements, setPlayerRelation, removePlayerRelation } from '../services/api.js'
+import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 
@@ -285,14 +312,30 @@ function allianceAtPoi(poiId) {
 }
 
 const scoutModal = ref({ open: false, type: 'poi', amount: 100 })
-const raidModal = ref({ open: false, mode: 'quick' })
-
 const raidModes = [
   { key: 'quick',      name: 'Quick Grab',     duration: '5 min',  desc: 'Low loot, fast return' },
   { key: 'sweep',      name: 'Field Sweep',    duration: '15 min', desc: 'Balanced risk & reward' },
   { key: 'extraction', name: 'Extraction Run', duration: '60 min', desc: 'High loot, contested risk' },
   { key: 'deep',       name: 'Deep Salvage',   duration: '4 hrs',  desc: 'Best drops, rare salvage items' },
 ]
+
+const scoutError = ref('')
+const attackModal = ref({
+  open: false, type: 'poi', raidMode: 'quick',
+  selectedUnits: {}, error: '', isReinforce: false
+})
+const ownedUnits = computed(() => {
+  const inv = props.settlement?.unitInventory ?? {}
+  return Object.entries(inv)
+    .filter(([, qty]) => qty > 0)
+    .map(([name, qty]) => ({ name, qty }))
+})
+const selectedPoiHasNonOwnArrival = computed(() => {
+  if (!selPoi.value) return false
+  return operations.value.some(op =>
+    op.poiId === selPoi.value.id && op.phase === 'arrived' && !op.isOwn
+  )
+})
 
 const currentRareTech = computed(() =>
     props.settlement?.rareTech ?? props.settlement?.resources?.rareTech ?? 0
@@ -307,41 +350,103 @@ function poiScoutCost(poi) {
 
 function openScoutModal(type) {
   scoutModal.value = { open: true, type, amount: type === 'poi' ? poiScoutCost(selPoi.value) : 100 }
+  scoutError.value = ''
 }
 
 function openRaidModal() {
   raidModal.value = { open: true, mode: 'quick' }
 }
 
-function confirmScout() {
-  // TODO: API call — sendPoiScout / sendSettlementScout
-  console.log('Scout sent:', scoutModal.value)
-  scoutModal.value.open = false
+async function confirmScout() {
+  const modal = scoutModal.value
+  if (!props.settlement?.id) return
+  scoutError.value = ''
+  try {
+    if (modal.type === 'poi' && selPoi.value) {
+      await scoutPoi(props.settlement.id, selPoi.value.id, modal.amount)
+    } else if (modal.type === 'settlement' && sel.value?.id) {
+      await scoutSettlement(props.settlement.id, sel.value.id, modal.amount)
+    }
+    scoutModal.value.open = false
+    await loadOperations()
+  } catch (err) {
+    scoutError.value = err?.response?.data ?? 'Scout failed.'
+  }
 }
 
-function confirmRaid() {
-  // TODO: API call — startRaid(settlementId, poiId, mode)
-  const poi = selPoi.value
-  const ownSlot = slots.value.find(s => s.status === 'yours')
-  if (!poi || !ownSlot) { raidModal.value.open = false; return }
-  const durations = { quick: 300000, sweep: 900000, extraction: 3600000, deep: 14400000 }
-  const travelDuration = durations[raidModal.value.mode] ?? 300000
-  const opId = 'op-' + Date.now()
-  operations.value.push({
-    id: opId, phase: 'outbound',
-    originX: ownSlot.x, originY: ownSlot.y,
-    destX: poi.x, destY: poi.y,
-    startTime: Date.now(), travelDuration,
-    isOwn: true, isAlliance: false,
-    poiId: poi.id,
-    playerName: props.player?.name ?? 'You',
-    unitSummary: 'Troops dispatched',
-  })
-  setTimeout(() => {
-    const op = operations.value.find(o => o.id === opId)
-    if (op) op.phase = 'arrived'
-  }, travelDuration)
-  raidModal.value.open = false
+function confirmRaid() { /* replaced — see confirmAttack */ }
+
+async function loadOperations() {
+  if (!props.settlement?.id) return
+  try {
+    const data = await getSettlementOperations(props.settlement.id)
+    operations.value = (data || []).map(op => ({
+      id: op.id,
+      phase: op.phase,
+      operationType: op.operationType,
+      originX: 0, originY: 0,
+      destX: 0, destY: 0,
+      startTime: new Date(op.startedAtUtc ?? op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000,
+      travelDuration: (op.travelSeconds ?? 60) * 1000,
+      arrivesAtUtc: op.arrivesAtUtc,
+      isOwn: op.isOwn,
+      isAlliance: false,
+      poiId: op.targetPoiId ?? null,
+      targetSettlementId: op.targetSettlementId ?? null,
+      playerName: op.originSettlementName ?? 'Unknown',
+      unitSummary: op.sentUnits
+        ? Object.entries(op.sentUnits).map(([k, v]) => `${v}x ${k}`).join(', ')
+        : null,
+      isReinforcement: op.operationType === 'reinforce_poi',
+    }))
+    operations.value.forEach(op => {
+      const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
+      if (ownSlot && op.isOwn) { op.originX = ownSlot.x; op.originY = ownSlot.y }
+      if (op.poiId) {
+        const poi = pois.value.find(p => p.id === op.poiId)
+        if (poi) { op.destX = poi.x; op.destY = poi.y }
+      } else if (op.targetSettlementId) {
+        const slot = slots.value.find(s => s.id === op.targetSettlementId)
+        if (slot) { op.destX = slot.x; op.destY = slot.y }
+      }
+    })
+  } catch (e) {
+    console.error('Failed to load operations:', e)
+  }
+}
+
+function openAttackModal(type) {
+  attackModal.value = { open: true, type, raidMode: 'quick', selectedUnits: {}, error: '', isReinforce: false }
+}
+
+function openReinforceModal() {
+  attackModal.value = { open: true, type: 'poi', raidMode: 'quick', selectedUnits: {}, error: '', isReinforce: true }
+}
+
+async function confirmAttack() {
+  const modal = attackModal.value
+  const units = Object.fromEntries(
+    Object.entries(modal.selectedUnits).filter(([, v]) => v > 0)
+  )
+  if (Object.keys(units).length === 0) {
+    modal.error = 'Select at least 1 unit to send.'
+    return
+  }
+  try {
+    if (modal.type === 'poi' && selPoi.value) {
+      if (modal.isReinforce) {
+        await reinforcePoi(props.settlement.id, selPoi.value.id, units)
+      } else {
+        await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode)
+      }
+    } else if (modal.type === 'settlement' && sel.value?.id) {
+      await attackSettlement(props.settlement.id, sel.value.id, units)
+    }
+    attackModal.value.open = false
+    await loadOperations()
+  } catch (err) {
+    modal.error = err?.response?.data ?? 'Attack failed.'
+  }
 }
 
 const viewX = computed(() => Math.round((-panX.value / zoom.value + cW.value / 2 / zoom.value) / 15))
@@ -480,7 +585,7 @@ function renderMap() {
     const progress = Math.min(1, (nowMs - op.startTime) / op.travelDuration)
     const curX = op.originX + (op.destX - op.originX) * progress
     const curY = op.originY + (op.destY - op.originY) * progress
-    const color = op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(180,128,255,0.55)'
+    const color = op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
     ctx.save()
     ctx.setLineDash([5 / zoom.value, 7 / zoom.value])
     ctx.lineWidth = 1.5 / zoom.value
@@ -612,8 +717,9 @@ onMounted(async () => {
     }
   }
   else {
-    // Clean up any leftover mock ops from previous sessions
-    operations.value = operations.value.filter(op => !String(op.id).startsWith('mock-'))
+    // Load real operations from backend and poll every 15 s
+    await loadOperations()
+    setInterval(loadOperations, 15000)
   }
 
   frameInterval = setInterval(() => {
@@ -826,6 +932,15 @@ onUnmounted(() => {
 .modal-confirm:hover{background:linear-gradient(180deg,rgba(0,212,255,.2),rgba(0,212,255,.08));box-shadow:0 0 14px rgba(0,212,255,.12)}
 .qty-btn{width:36px;height:36px;border:1px solid var(--border);background:rgba(0,212,255,.06);color:var(--cyan);font-family:var(--ff-title);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .qty-btn:hover{border-color:var(--border-bright);background:rgba(0,212,255,.12)}
+.sa--reinforce{background:rgba(48,255,128,.08);border-color:rgba(48,255,128,.3);color:#30ff80}
+.sa--reinforce:hover{box-shadow:0 0 10px rgba(48,255,128,.2)}
+.modal-box--wide{width:min(560px,94vw)}
+.modal-unit-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.modal-unit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);background:rgba(0,212,255,.02)}
+.modal-unit-name{flex:1;font-size:11px;color:var(--bright);font-weight:700}
+.modal-unit-avail{font-size:9px;color:var(--muted);font-family:var(--ff-title);letter-spacing:.8px;min-width:52px;text-align:right}
+.modal-input--sm{width:58px}
+.modal-error-msg{padding:8px 10px;border:1px solid rgba(255,60,60,.3);background:rgba(255,60,60,.06);color:#ff7060;font-size:10px}
 .ps-enter-active,.ps-leave-active{transition:transform .2s,opacity .2s}
 .ps-enter-from,.ps-leave-to{transform:translateY(100%);opacity:0}
 .modal-fade-enter-active,.modal-fade-leave-active{transition:opacity .18s}

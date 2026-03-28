@@ -107,9 +107,6 @@
             </div>
           </div>
 
-              <div class="modal-queue-note">
-                Cancel returns ~75% resources (preview shown where available). Cancels remove queued items in reverse order (highest queued level first).
-              </div>
         </div>
 
         <div v-if="upgradeError" class="modal-error">{{ upgradeError }}</div>
@@ -251,10 +248,6 @@ const buildingQueue = computed(() => (props.queueItems || []).filter(q => q.type
 const buildingActiveQueue = computed(() => buildingQueue.value.filter(q => q.isActive))
 const buildingWaitingQueue = computed(() => buildingQueue.value.filter(q => q.isWaiting))
 
-// Allow queuing even when active slots are full. Only block on real constraints
-// Allow queuing even while the same building is actively constructing. Some backends may
-// set canUpgrade=false for a building while it is constructing; treat an active building
-// as eligible for queuing so players can schedule the next level.
 const canUpgradeNow = computed(() => {
   const upgradeFlag = props.building.canUpgrade || props.building.isConstructing
   return (
@@ -262,7 +255,8 @@ const canUpgradeNow = computed(() => {
       !props.building.isFutureFeature &&
       props.building.isBuildable !== false &&
       canAfford.value &&
-      missingPrerequisites.value.length === 0
+      missingPrerequisites.value.length === 0 &&
+      !props.building.queueFull
   )
 })
 

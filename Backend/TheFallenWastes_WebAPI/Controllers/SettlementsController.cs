@@ -355,12 +355,13 @@ namespace TheFallenWastes_WebAPI.Controllers
             var player = await _db.Players.FindAsync(settlement.PlayerId);
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
             int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
-            bool queueFull = activeCount >= queueLimit;
 
             // Gather queued info per building type so UI can decide about chained queuing
             var allQueued = await _db.BuildingUpgradeQueueItems
                 .Where(q => q.SettlementId == settlement.Id)
                 .ToListAsync();
+            int totalWaiting = allQueued.Count(q => !q.IsStarted);
+            bool queueFull = (activeCount + totalWaiting) >= queueLimit;
             var waitingCounts = allQueued.Where(q => !q.IsStarted).GroupBy(q => q.BuildingType)
                 .ToDictionary(g => g.Key, g => g.Count());
             var highestQueuedTarget = allQueued.GroupBy(q => q.BuildingType)
@@ -507,6 +508,11 @@ namespace TheFallenWastes_WebAPI.Controllers
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
             int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
 
+            int totalInQueue = activeCount + await _db.BuildingUpgradeQueueItems
+                .CountAsync(q => q.SettlementId == settlement.Id && !q.IsStarted);
+            if (totalInQueue >= queueLimit)
+                return BadRequest($"Build queue is full ({totalInQueue}/{queueLimit}).");
+
             var cost = BuildingDefinitions.GetUpgradeCost(buildingType, targetLevel);
             if (!settlement.Resources.HasEnough(cost.Water, cost.Food, cost.Scrap, cost.Fuel, cost.Energy, cost.RareTech))
                 return BadRequest("Not enough resources.");
@@ -530,7 +536,7 @@ namespace TheFallenWastes_WebAPI.Controllers
             _db.BuildingUpgradeQueueItems.Add(queueItem);
 
             // If there's an available active slot and this building is not currently constructing, start immediately
-            if (activeCount < queueLimit && !building.IsConstructing)
+            if (activeCount < 1 && !building.IsConstructing)
             {
                 int buildTime = BuildingDefinitions.GetBuildTimeSeconds(buildingType, targetLevel);
                 // mark queue item as started and link to the building
@@ -540,6 +546,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
                 settlement.RecalculateUsedPopulation();
                 await _db.SaveChangesAsync();
+                await RecalculatePlayerScore(settlement.PlayerId);
 
                 return Ok(new
                 {
@@ -560,6 +567,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             settlement.RecalculateUsedPopulation();
             await _db.SaveChangesAsync();
+            await RecalculatePlayerScore(settlement.PlayerId);
 
             return Ok(new
             {
@@ -593,6 +601,17 @@ namespace TheFallenWastes_WebAPI.Controllers
                 .OrderByDescending(q => q.TargetLevel)
                 .ToListAsync();
 
+            // Enforce LIFO: if a specific level is requested, it must be the highest waiting level
+            if (request.TargetLevel.HasValue && waitingForBuilding.Any())
+            {
+                int highestWaiting = waitingForBuilding.Max(q => q.TargetLevel);
+                if (request.TargetLevel.Value != highestWaiting)
+                    return BadRequest(
+                        $"Cannot cancel level {request.TargetLevel.Value}. " +
+                        $"You must cancel level {highestWaiting} first."
+                    );
+            }
+
             // If there are waiting items, cancel the top-most (LIFO) by default
             var topQueued = waitingForBuilding.FirstOrDefault();
             if (topQueued != null)
@@ -621,6 +640,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 );
 
                 await _db.SaveChangesAsync();
+                await RecalculatePlayerScore(settlement.PlayerId);
 
                 // After removing a waiting item, try to start next queued upgrades
                 await StartNextQueuedConstructionsInternal(settlement);
@@ -649,6 +669,23 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (anyHigherWaiting)
             {
                 return BadRequest("Cannot cancel active construction while higher queued upgrades exist. Cancel queued upgrades first.");
+            }
+
+            // Enforce LIFO: if a specific level is requested, verify no higher waiting items exist
+            if (request.TargetLevel.HasValue)
+            {
+                var highestQueued = await _db.BuildingUpgradeQueueItems
+                    .Where(q => q.SettlementId == settlement.Id
+                        && q.BuildingType == buildingType
+                        && !q.IsStarted)
+                    .Select(q => (int?)q.TargetLevel)
+                    .MaxAsync();
+
+                if (highestQueued.HasValue && highestQueued.Value > request.TargetLevel.Value)
+                    return BadRequest(
+                        $"Cannot cancel level {request.TargetLevel.Value}. " +
+                        $"You must cancel level {highestQueued.Value} first."
+                    );
             }
 
             // Try to find a started queue item linked to this active building (prefer ActiveBuildingId)
@@ -693,6 +730,7 @@ namespace TheFallenWastes_WebAPI.Controllers
             );
 
             await _db.SaveChangesAsync();
+            await RecalculatePlayerScore(settlement.PlayerId);
 
             // After cancelling active, try to start next waiting items
             await StartNextQueuedConstructionsInternal(settlement);
@@ -1030,24 +1068,31 @@ namespace TheFallenWastes_WebAPI.Controllers
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
             int activeCount = settlement.Buildings.Count(b => b.IsConstructing);
 
-            if (activeCount >= queueLimit)
+            if (activeCount >= 1)
                 return;
 
-            // First, remove any started queue items that are linked to buildings which are no longer constructing
+            // First, remove any started queue items that are linked to buildings which are no longer constructing.
+            // Use ExecuteDeleteAsync (direct SQL) instead of Remove() + SaveChangesAsync() to avoid
+            // DbUpdateConcurrencyException when concurrent requests both attempt to delete the same rows.
             var startedItems = await _db.BuildingUpgradeQueueItems
                 .Where(q => q.SettlementId == settlement.Id && q.IsStarted && q.ActiveBuildingId != null)
                 .ToListAsync();
 
-            foreach (var si in startedItems)
-            {
-                var linked = settlement.Buildings.FirstOrDefault(b => b.Id == si.ActiveBuildingId);
-                if (linked == null || !linked.IsConstructing)
+            var staleIds = startedItems
+                .Where(si =>
                 {
-                    _db.BuildingUpgradeQueueItems.Remove(si);
-                }
-            }
+                    var linked = settlement.Buildings.FirstOrDefault(b => b.Id == si.ActiveBuildingId);
+                    return linked == null || !linked.IsConstructing;
+                })
+                .Select(si => si.Id)
+                .ToList();
 
-            await _db.SaveChangesAsync();
+            if (staleIds.Count > 0)
+            {
+                await _db.BuildingUpgradeQueueItems
+                    .Where(q => staleIds.Contains(q.Id))
+                    .ExecuteDeleteAsync();
+            }
 
             var waiting = await _db.BuildingUpgradeQueueItems
                 .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
@@ -1056,7 +1101,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             foreach (var q in waiting)
             {
-                if (activeCount >= queueLimit)
+                if (activeCount >= 1)
                     break;
 
                 // ensure this is the next waiting item for its building (no lower-target waiting remains)
@@ -1079,6 +1124,13 @@ namespace TheFallenWastes_WebAPI.Controllers
                 if (building.IsConstructing)
                     continue;
 
+                // Guard: remove stale queue items whose target level the building has already reached or surpassed
+                if (building.Level >= q.TargetLevel)
+                {
+                    _db.BuildingUpgradeQueueItems.Remove(q);
+                    continue;
+                }
+
                 int buildTime = BuildingDefinitions.GetBuildTimeSeconds(q.BuildingType, q.TargetLevel);
                 // mark queue item as started and link to the building
                 q.MarkStarted(buildTime, building.Id);
@@ -1088,6 +1140,22 @@ namespace TheFallenWastes_WebAPI.Controllers
                 activeCount++;
             }
 
+            await _db.SaveChangesAsync();
+            await RecalculatePlayerScore(settlement.PlayerId);
+        }
+
+        private async Task RecalculatePlayerScore(Guid playerId)
+        {
+            var player = await _db.Players.FindAsync(playerId);
+            if (player == null) return;
+
+            var settlements = await _db.Settlements
+                .Include(s => s.Buildings)
+                .Where(s => s.PlayerId == playerId)
+                .ToListAsync();
+
+            int totalPower = settlements.Sum(s => s.GetTotalBuildingPower());
+            player.SetScore(totalPower);
             await _db.SaveChangesAsync();
         }
 
@@ -1194,6 +1262,7 @@ namespace TheFallenWastes_WebAPI.Controllers
     public class UpgradeBuildingRequest
     {
         public string BuildingType { get; set; } = string.Empty;
+        public int? TargetLevel { get; set; }
     }
 
     public class ActivateCommanderRequest
