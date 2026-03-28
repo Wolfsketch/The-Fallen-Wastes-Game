@@ -528,6 +528,36 @@ async function confirmScout() {
     }
     scoutModal.value.open = false
     if (props.refreshSettlement) await props.refreshSettlement()
+
+    // Inject local operation immediately so line appears without waiting for poll
+    const ownSlot = slots.value.find(s => s.status === 'yours')
+    const targetPoi = selPoi.value
+    if (ownSlot && targetPoi) {
+      const travelMs = (estimatedTravelSeconds.value ?? 60) * 1000
+      operations.value.push({
+        id: 'local-scout-' + Date.now(),
+        phase: 'outbound',
+        operationType: 'scout_poi',
+        originX: ownSlot.x, originY: ownSlot.y,
+        destX: targetPoi.x, destY: targetPoi.y,
+        startTime: Date.now(),
+        travelDuration: travelMs,
+        arrivesAtUtc: new Date(Date.now() + travelMs).toISOString(),
+        isOwn: true,
+        isAlliance: false,
+        poiId: targetPoi.id,
+        targetSettlementId: null,
+        playerName: props.player?.username ?? 'You',
+        unitSummary: null,
+        isReinforcement: false,
+        resultJson: null,
+        lootItemsEarned: 0,
+        lootIntervalSeconds: 300,
+        poiLabel: targetPoi.label ?? targetPoi.id,
+      })
+      renderMap()
+    }
+
     await loadOperations()
   } catch (err) {
     const msg = err?.response?.data
@@ -561,9 +591,9 @@ async function loadOperations() {
       startTime: op.startedAtUtc
         ? new Date(op.startedAtUtc).getTime()
         : op.arrivesAtUtc
-          ? new Date(op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000
+          ? new Date(op.arrivesAtUtc).getTime() - ((op.travelSeconds ?? op.TravelSeconds ?? 60)) * 1000
           : Date.now(),
-      travelDuration: (op.travelSeconds ?? 60) * 1000,
+      travelDuration: ((op.travelSeconds ?? op.TravelSeconds ?? 60)) * 1000,
       arrivesAtUtc: op.arrivesAtUtc,
       isOwn: op.isOwn,
       isAlliance: false,
@@ -583,7 +613,10 @@ async function loadOperations() {
     // Keep currently-animating outbound ops not yet in the new data
     const existingOutbound = operations.value.filter(op =>
       op.phase === 'outbound' &&
-      !newOps.some(n => n.id === op.id)
+      !newOps.some(n => n.id === op.id) &&
+      // Keep local ops only if no real op with same poiId/type exists yet
+      !(String(op.id).startsWith('local-') &&
+        newOps.some(n => n.poiId === op.poiId && n.operationType === op.operationType))
     )
 
     operations.value = [...newOps, ...existingOutbound]
@@ -689,6 +722,40 @@ async function confirmAttack() {
     }
     attackModal.value.open = false
     if (props.refreshSettlement) await props.refreshSettlement()
+
+    const ownSlotA = slots.value.find(s => s.status === 'yours')
+    const targetPoiA = attackModal.value.type === 'poi' ? selPoi.value : null
+    const targetSlotA = attackModal.value.type === 'settlement' ? sel.value : null
+    if (ownSlotA && (targetPoiA || targetSlotA)) {
+      const travelMs = (estimatedTravelSeconds.value ?? 300) * 1000
+      const destX = targetPoiA ? targetPoiA.x : (targetSlotA?.x ?? 0)
+      const destY = targetPoiA ? targetPoiA.y : (targetSlotA?.y ?? 0)
+      operations.value.push({
+        id: 'local-attack-' + Date.now(),
+        phase: 'outbound',
+        operationType: modal.isReinforce ? 'reinforce_poi' : 'raid_poi',
+        originX: ownSlotA.x, originY: ownSlotA.y,
+        destX, destY,
+        startTime: Date.now(),
+        travelDuration: travelMs,
+        arrivesAtUtc: new Date(Date.now() + travelMs).toISOString(),
+        isOwn: true,
+        isAlliance: false,
+        poiId: targetPoiA?.id ?? null,
+        targetSettlementId: targetSlotA?.id ?? null,
+        playerName: props.player?.username ?? 'You',
+        unitSummary: Object.entries(modal.selectedUnits ?? {})
+          .filter(([, v]) => v > 0)
+          .map(([k, v]) => `${v}x ${k}`).join(', '),
+        isReinforcement: modal.isReinforce ?? false,
+        resultJson: null,
+        lootItemsEarned: 0,
+        lootIntervalSeconds: 300,
+        poiLabel: targetPoiA?.label ?? null,
+      })
+      renderMap()
+    }
+
     await loadOperations()
   } catch (err) {
     modal.error = err?.response?.data ?? 'Attack failed.'
