@@ -177,6 +177,10 @@
                   {{ raidVaultLevel < 1 ? '— No Relic Vault built' : '' }}
                 </span>
               </div>
+              <div class="modal-vault-info">
+                <span class="modal-label">TRAVEL TIME</span>
+                <span class="modal-value">{{ formatTravelTime(estimatedTravelSeconds) }}</span>
+              </div>
             </template>
             <template v-else>
               <div class="modal-info">Send more RT than enemy Vault to succeed. Both sides lose RT. Min: <strong>100 RT</strong>.</div>
@@ -196,6 +200,10 @@
                   {{ raidVaultLevel < 1 ? '— No Relic Vault built' : '' }}
                 </span>
               </div>
+              <div class="modal-vault-info">
+                <span class="modal-label">TRAVEL TIME</span>
+                <span class="modal-value">{{ formatTravelTime(estimatedTravelSeconds) }}</span>
+              </div>
             </template>
             <div v-if="scoutError" class="modal-error-msg">{{ scoutError }}</div>
           </div>
@@ -203,6 +211,29 @@
         </div>
       </div>
     </transition>
+
+    <!-- Scout report popup -->
+    <div v-if="scoutReport" class="modal-backdrop" @click.self="scoutReport = null">
+      <div class="wl-modal">
+        <div class="modal-header">
+          <span class="modal-title">SCOUT REPORT — {{ scoutReport.poiId }}</span>
+          <button class="modal-close" @click="scoutReport = null">✕</button>
+        </div>
+        <div class="modal-body" style="padding:16px">
+          <div style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:12px">
+            DETECTED UNITS — TIER {{ scoutReport.tier }}
+          </div>
+          <div v-for="(qty, name) in scoutReport.npcUnits" :key="name"
+               style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px">
+            <span style="color:var(--text)">{{ name }}</span>
+            <span style="color:var(--red);font-family:var(--ff-title);font-weight:700">× {{ qty }}</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-confirm" @click="scoutReport = null">CLOSE</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Attack / Reinforce modal -->
     <transition name="modal-fade">
@@ -241,6 +272,7 @@
                 </div>
               </div>
               <div class="modal-hint">Total selected: {{ Object.values(attackModal.selectedUnits).reduce((s, v) => s + (v || 0), 0) }}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">⏱ Estimated travel: {{ formatTravelTime(estimatedTravelSeconds) }}</div>
             </div>
             <div v-if="attackModal.error" class="modal-error-msg">{{ attackModal.error }}</div>
           </div>
@@ -262,7 +294,7 @@ import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettle
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 
-const props = defineProps({ player: Object, settlement: Object })
+const props = defineProps({ player: Object, settlement: Object, refreshSettlement: Function })
 const player = computed(() => props.player)
 const settlement = computed(() => props.settlement)
 
@@ -334,6 +366,7 @@ const raidModes = [
 ]
 
 const scoutError = ref('')
+const scoutReport = ref(null)
 const attackModal = ref({
   open: false, type: 'poi', raidMode: 'quick',
   selectedUnits: {}, error: '', isReinforce: false
@@ -356,6 +389,34 @@ const currentRareTech = computed(() =>
 )
 const vaultRareTech = computed(() => props.settlement?.vaultRareTech ?? 0)
 const raidVaultLevel = computed(() => props.settlement?.raidVaultLevel ?? 0)
+
+const estimatedTravelSeconds = computed(() => {
+  const own = slots.value.find(s => s.status === 'yours')
+  if (!own) return null
+  let destX = 0, destY = 0
+  if (scoutModal.value.open) {
+    if (scoutModal.value.type === 'poi' && selPoi.value) {
+      destX = selPoi.value.x; destY = selPoi.value.y
+    } else if (sel.value) {
+      destX = sel.value.x; destY = sel.value.y
+    }
+  } else if (attackModal.value.open) {
+    if (attackModal.value.type === 'poi' && selPoi.value) {
+      destX = selPoi.value.x; destY = selPoi.value.y
+    } else if (sel.value) {
+      destX = sel.value.x; destY = sel.value.y
+    }
+  }
+  const dist = Math.sqrt(Math.pow(destX - own.x, 2) + Math.pow(destY - own.y, 2))
+  return Math.max(30, Math.round(dist * 0.3))
+})
+
+function formatTravelTime(seconds) {
+  if (!seconds) return '—'
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+}
 
 function poiScoutCost(poi) {
   if (!poi) return 5
@@ -384,6 +445,7 @@ async function confirmScout() {
       await scoutSettlement(props.settlement.id, sel.value.id, modal.amount)
     }
     scoutModal.value.open = false
+    if (props.refreshSettlement) await props.refreshSettlement()
     await loadOperations()
   } catch (err) {
     const msg = err?.response?.data
@@ -404,7 +466,9 @@ async function loadOperations() {
       operationType: op.operationType,
       originX: 0, originY: 0,
       destX: 0, destY: 0,
-      startTime: new Date(op.startedAtUtc ?? op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000,
+      startTime: op.startedAtUtc
+        ? new Date(op.startedAtUtc).getTime()
+        : new Date(op.arrivesAtUtc).getTime() - (op.travelSeconds ?? 60) * 1000,
       travelDuration: (op.travelSeconds ?? 60) * 1000,
       arrivesAtUtc: op.arrivesAtUtc,
       isOwn: op.isOwn,
@@ -416,6 +480,7 @@ async function loadOperations() {
         ? Object.entries(op.sentUnits).map(([k, v]) => `${v}x ${k}`).join(', ')
         : null,
       isReinforcement: op.operationType === 'reinforce_poi',
+      resultJson: op.resultJson ?? null,
     }))
     operations.value.forEach(op => {
       const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
@@ -426,6 +491,20 @@ async function loadOperations() {
       } else if (op.targetSettlementId) {
         const slot = slots.value.find(s => s.id === op.targetSettlementId)
         if (slot) { op.destX = slot.x; op.destY = slot.y }
+      }
+    })
+    operations.value.forEach(op => {
+      if (op.operationType === 'scout_poi' && op.phase === 'arrived' && op.resultJson) {
+        try {
+          const result = JSON.parse(op.resultJson)
+          if (result?.npcUnits && !scoutReport.value) {
+            scoutReport.value = {
+              poiId: op.poiId,
+              npcUnits: result.npcUnits,
+              tier: result.tier ?? 1
+            }
+          }
+        } catch {}
       }
     })
   } catch (e) {
@@ -461,6 +540,7 @@ async function confirmAttack() {
       await attackSettlement(props.settlement.id, sel.value.id, units)
     }
     attackModal.value.open = false
+    if (props.refreshSettlement) await props.refreshSettlement()
     await loadOperations()
   } catch (err) {
     modal.error = err?.response?.data ?? 'Attack failed.'
@@ -918,6 +998,7 @@ onUnmounted(() => {
 .pai-units{font-size:9px;color:#b480ff;font-family:var(--ff-title);letter-spacing:.5px}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal-box{width:min(440px,92vw);background:linear-gradient(180deg,rgba(8,16,28,.98),rgba(5,10,18,.99));border:1px solid var(--border-bright);box-shadow:0 0 40px rgba(0,0,0,.6),0 0 80px rgba(0,212,255,.04)}
+.wl-modal{width:min(400px,90vw);background:linear-gradient(180deg,rgba(8,16,28,.98),rgba(5,10,18,.99));border:1px solid var(--border-bright);box-shadow:0 0 40px rgba(0,0,0,.6),0 0 80px rgba(0,212,255,.04)}
 .modal-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(0,212,255,.05),transparent)}
 .modal-title{font-family:var(--ff-title);font-size:11px;color:var(--cyan);letter-spacing:2.5px}
 .modal-close{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;padding:2px 8px;font-size:10px;transition:all .15s}

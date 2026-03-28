@@ -38,10 +38,52 @@ namespace TheFallenWastes_WebAPI.Controllers
             var now = DateTime.UtcNow;
 
             // Resolve phase transitions based on current time
+            // Collect attacker settlement -> player mapping for report messages
+            var attackerSettlementIds = operations
+                .Where(o => o.Phase == "outbound" && now >= o.ArrivesAtUtc)
+                .Select(o => o.AttackerSettlementId)
+                .Distinct()
+                .ToList();
+
+            Dictionary<Guid, Guid> settlementToPlayer = new();
+            if (attackerSettlementIds.Count > 0)
+            {
+                settlementToPlayer = await _db.Settlements
+                    .Where(s => attackerSettlementIds.Contains(s.Id))
+                    .ToDictionaryAsync(s => s.Id, s => s.PlayerId);
+            }
+
             foreach (var op in operations)
             {
                 if (op.Phase == "outbound" && now >= op.ArrivesAtUtc)
+                {
+                    if (op.OperationType == "scout_poi")
+                    {
+                        var npcUnits = GenerateNpcUnits(op.TargetPoiId ?? "unknown");
+                        int tier = npcUnits.Values.Sum() > 20 ? 3 : npcUnits.Values.Sum() > 10 ? 2 : 1;
+                        var resultJson = JsonSerializer.Serialize(new
+                        {
+                            success = true,
+                            poiId = op.TargetPoiId,
+                            npcUnits,
+                            tier
+                        });
+                        op.SetResult(resultJson);
+
+                        // Send report message to attacker player on arrival
+                        if (settlementToPlayer.TryGetValue(op.AttackerSettlementId, out var playerId))
+                        {
+                            _db.Messages.Add(new Message(
+                                senderPlayerId: playerId,
+                                receiverPlayerId: playerId,
+                                subject: $"Scout Report \u2014 {op.TargetPoiId}",
+                                body: $"Your scout of {op.TargetPoiId} returned. Tier {tier} defenders detected. {npcUnits.Sum(u => u.Value)} total NPC units.",
+                                messageType: "report"));
+                        }
+                    }
+
                     op.MarkArrived();
+                }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                     op.MarkCompleted(op.ResultJson ?? "{}");
             }
@@ -93,8 +135,10 @@ namespace TheFallenWastes_WebAPI.Controllers
                         SentUnits = sentUnits,
                         o.ScoutRareTech,
                         o.RaidMode,
+                        o.StartedAtUtc,
                         o.ArrivesAtUtc,
                         o.ReturnsAtUtc,
+                        TravelSeconds = (int)(o.ArrivesAtUtc - o.StartedAtUtc).TotalSeconds,
                         RemainingSeconds = (int)remainingSeconds,
                         IsOwn = o.AttackerSettlementId == settlementId,
                         o.ResultJson
@@ -142,16 +186,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 raidMode: null,
                 travelSeconds: 60);
 
-            // Resolve immediately
-            operation.MarkArrived();
-            var resultJson = JsonSerializer.Serialize(new
-            {
-                success = true,
-                poiId = request.TargetPoiId,
-                rareTechSpent = request.RareTechAmount
-            });
-            operation.SetResult(resultJson);
-            operation.MarkCompleted(resultJson);
+            // Operation starts as "outbound" — resolved when GET is polled after ArrivesAtUtc
 
             _db.Operations.Add(operation);
 
@@ -485,6 +520,47 @@ namespace TheFallenWastes_WebAPI.Controllers
         {
             public string TargetPoiId { get; set; } = string.Empty;
             public Dictionary<string, int> Units { get; set; } = new();
+        }
+
+        // ─── NPC unit generation ──────────────────────────────────────────────
+        // Deterministic: same poiId always produces the same defenders.
+        private static Dictionary<string, int> GenerateNpcUnits(string poiId, string? poiType = null)
+        {
+            int hash = Math.Abs(poiId.GetHashCode());
+            var units = new Dictionary<string, int>();
+            int tier = (hash % 3) + 1;
+
+            if (tier == 1)
+            {
+                units["Scavenger"] = 5 + (hash % 10);
+                units["Raider"] = 2 + (hash % 5);
+            }
+            else if (tier == 2)
+            {
+                units["Raider"] = 8 + (hash % 8);
+                units["Rifleman"] = 3 + (hash % 5);
+                units["Outpost Defender"] = 2 + (hash % 3);
+            }
+            else
+            {
+                units["Rifleman"] = 10 + (hash % 10);
+                units["Shock Fighter"] = 5 + (hash % 5);
+                units["Outpost Defender"] = 4 + (hash % 4);
+                units["Sniper"] = 2 + (hash % 3);
+            }
+
+            return units;
+        }
+
+        // ─── Travel time helper ──────────────────────────────────────────────
+        // TODO: wire originX/Y and destX/Y from settlement coordinates once added.
+        // Formula: distance = sqrt((dx)^2 + (dy)^2); seconds = (int)(distance * 0.3);
+        // World is 5400x4200. At distance 500 units → ~150s base. Clamped 30s–24h.
+        private static int CalculateTravelSeconds(int originX, int originY, int destX, int destY, int baseSpeedSeconds = 30)
+        {
+            double distance = Math.Sqrt(Math.Pow(destX - originX, 2) + Math.Pow(destY - originY, 2));
+            int seconds = (int)(distance * 0.3);
+            return Math.Max(30, Math.Min(seconds, 86400));
         }
     }
 }
