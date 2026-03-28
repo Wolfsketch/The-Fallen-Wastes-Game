@@ -25,6 +25,7 @@ namespace TheFallenWastes_Domain.Enums
 
         // SPECIAL STOCK BUILDING
         TechVault,
+        RaidVault,
 
         // MILITARY BUILDINGS
         Barracks,

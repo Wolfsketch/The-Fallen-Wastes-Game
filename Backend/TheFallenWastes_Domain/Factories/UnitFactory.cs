@@ -306,22 +306,6 @@ namespace TheFallenWastes_Domain.UnitFactory
 
                 // COMMAND CENTER
                 new Unit(
-                    "Scout Drone",
-                    "Recon platform used for battlefield awareness and movement intelligence.",
-                    "Scouting and intel",
-                    UnitCategory.Scout,
-                    ProductionFacility.CommandCenter,
-                    CombatDamageType.Energy,
-                    "scout-drone",
-                    2, 2, 1, 3,
-                    26,
-                    1,
-                    0,
-                    1,
-                    300,
-                    new UnitCost(energy: 40, rareTech: 10)
-                ),
-                new Unit(
                     "Convoy",
                     "Strategic convoy used both to found a new settlement and to claim an enemy settlement after a successful siege.",
                     "Expansion and takeover unit",

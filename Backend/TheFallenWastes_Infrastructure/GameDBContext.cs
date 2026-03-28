@@ -27,6 +27,7 @@ namespace TheFallenWastes_Infrastructure
 
         public DbSet<UnitTrainingQueueItem> UnitTrainingQueueItems { get; set; }
         public DbSet<BuildingUpgradeQueueItem> BuildingUpgradeQueueItems { get; set; }
+        public DbSet<Operation> Operations { get; set; }
 
         public GameDbContext(DbContextOptions<GameDbContext> options)
             : base(options)

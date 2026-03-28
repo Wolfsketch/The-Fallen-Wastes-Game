@@ -162,6 +162,13 @@ namespace TheFallenWastes_Domain.GameData
                     new(BuildingType.TechLab, 4)
                 },
 
+                // SPECIAL STORAGE
+                BuildingType.RaidVault => new()
+                {
+                    new(BuildingType.TechLab, 3),
+                    new(BuildingType.TechVault, 5)
+                },
+
                 // FUTURE FEATURE
                 BuildingType.WatchTower => new()
                 {
@@ -305,6 +312,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.ScrapVault => 0,
                 BuildingType.WaterTank => 0,
                 BuildingType.TechVault => 0,
+                BuildingType.RaidVault => 0,
 
                 BuildingType.Barracks => level * 3,
                 BuildingType.Garage => level * 4,
@@ -338,6 +346,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.FuelDepot => 1000 + ((level - 1) * 900),
                 BuildingType.PowerBank => 1000 + ((level - 1) * 900),
                 BuildingType.TechVault => 200 + ((level - 1) * 180),
+                BuildingType.RaidVault => level >= 10 ? int.MaxValue : level * 100,
                 _ => 0
             };
         }
@@ -385,6 +394,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.ScrapVault => level * 4,
                 BuildingType.WaterTank => level * 4,
                 BuildingType.TechVault => level * 6,
+                BuildingType.RaidVault => level * 25,
 
                 BuildingType.Barracks => level * 22,
                 BuildingType.Garage => level * 24,
@@ -439,6 +449,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.ScrapVault => "Scrap Vault",
                 BuildingType.WaterTank => "Water Tank",
                 BuildingType.TechVault => "Tech Vault",
+                BuildingType.RaidVault => "Relic Vault",
 
                 BuildingType.Barracks => "Barracks",
                 BuildingType.Garage => "Garage",
@@ -475,6 +486,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.ScrapVault => "Vergroot de opslagcapaciteit voor Scrap en levert settlement power.",
                 BuildingType.WaterTank => "Vergroot de opslagcapaciteit voor Water en levert settlement power.",
                 BuildingType.TechVault => "Vergroot de opslagcapaciteit voor RareTech en levert extra settlement power.",
+                BuildingType.RaidVault => "Beveiligd archief voor RareTech reserves. Grotere stockage vertraagt scout-plunderingen. Vanaf level 10 onbeperkte opslag.",
 
                 BuildingType.Barracks => "Ontgrendelt en versnelt infantry training.",
                 BuildingType.Garage => "Ontgrendelt en versnelt vehicle training.",
@@ -506,7 +518,7 @@ namespace TheFallenWastes_Domain.GameData
                     or BuildingType.ScrapVault or BuildingType.WaterTank
                     => "storage",
 
-                BuildingType.TechVault
+                BuildingType.TechVault or BuildingType.RaidVault
                     => "special-storage",
 
                 BuildingType.Barracks or BuildingType.Garage or BuildingType.Workshop or BuildingType.CommandCenter
@@ -644,6 +656,14 @@ namespace TheFallenWastes_Domain.GameData
                     RareTech = 5
                 },
 
+                BuildingType.RaidVault => new BuildingCost
+                {
+                    Scrap = 140,
+                    Fuel = 35,
+                    Energy = 30,
+                    RareTech = 5
+                },
+
                 // MILITARY
                 BuildingType.Barracks => new BuildingCost
                 {
@@ -735,6 +755,7 @@ namespace TheFallenWastes_Domain.GameData
                 BuildingType.ScrapVault => 90,
                 BuildingType.WaterTank => 90,
                 BuildingType.TechVault => 120,
+                BuildingType.RaidVault => 120,
 
                 // MILITARY
                 BuildingType.Barracks => 240,

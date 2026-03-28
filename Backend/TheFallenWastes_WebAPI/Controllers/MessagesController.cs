@@ -100,6 +100,42 @@ namespace TheFallenWastes_WebAPI.Controllers
             return Ok(new { Message = "Marked as read." });
         }
 
+        [HttpGet("{playerId}/reports")]
+        public async Task<IActionResult> GetReports(Guid playerId)
+        {
+            var messages = await _db.Messages
+                .Where(m => m.ReceiverPlayerId == playerId &&
+                            (m.MessageType == "report" || m.MessageType == "notification"))
+                .OrderByDescending(m => m.SentAtUtc)
+                .ToListAsync();
+
+            var playerIds = messages
+                .Select(m => m.SenderPlayerId)
+                .Concat(messages.Select(m => m.ReceiverPlayerId))
+                .Distinct()
+                .ToList();
+
+            var players = await _db.Players
+                .Where(p => playerIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Username);
+
+            var result = messages.Select(m => new
+            {
+                m.Id,
+                SenderId = m.SenderPlayerId,
+                ReceiverId = m.ReceiverPlayerId,
+                SenderName = players.GetValueOrDefault(m.SenderPlayerId, "Unknown"),
+                ReceiverName = players.GetValueOrDefault(m.ReceiverPlayerId, "Unknown"),
+                m.Subject,
+                m.Body,
+                m.MessageType,
+                m.SentAtUtc,
+                m.IsRead
+            });
+
+            return Ok(result);
+        }
+
         [HttpGet("sent/{playerId}")]
         public async Task<IActionResult> GetSent(Guid playerId)
         {

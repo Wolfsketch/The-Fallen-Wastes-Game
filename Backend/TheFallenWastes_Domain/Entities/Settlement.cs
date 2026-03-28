@@ -46,6 +46,7 @@ namespace TheFallenWastes_Domain.Entities
         public int FuelCapacity => GetStorageCapacity(BuildingType.FuelDepot);
         public int EnergyCapacity => GetStorageCapacity(BuildingType.PowerBank);
         public int RareTechCapacity => GetStorageCapacity(BuildingType.TechVault);
+        public int RaidVaultCapacity => GetStorageCapacity(BuildingType.RaidVault);
 
         private Settlement()
         {
@@ -363,6 +364,34 @@ namespace TheFallenWastes_Domain.Entities
                 EnergyCapacity,
                 RareTechCapacity
             );
+        }
+
+        /// <summary>
+        /// Returns how much RareTech was stolen.
+        /// Attacker wins if attackerRareTech > defenderRaidVaultStock.
+        /// Defender loses all their RaidVault stock.
+        /// Returns 0 if attacker has less RT than defender (scout fails silently for defender).
+        /// </summary>
+        public int TryScoutRaidVault(int attackerRareTech, out bool defenderNotified)
+        {
+            int defenderStock = Resources.RareTech;
+
+            // Only the RaidVault stock is at risk — cap it at RaidVaultCapacity
+            int atRisk = Math.Min(defenderStock, RaidVaultCapacity);
+
+            if (attackerRareTech > atRisk)
+            {
+                // Attacker wins: steal all at-risk RT from defender
+                Resources.Spend(0, 0, 0, 0, 0, atRisk);
+                defenderNotified = true;
+                return atRisk;
+            }
+            else
+            {
+                // Attacker loses: nothing happens to defender
+                defenderNotified = false;
+                return 0;
+            }
         }
     }
 }
