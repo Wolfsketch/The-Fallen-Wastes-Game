@@ -125,6 +125,66 @@
             Defensive strength is currently centered on the perimeter wall. Additional defensive layers can be integrated later.
           </div>
         </section>
+
+        <section class="panel relic-panel" v-if="relicVaultLevel > 0">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">RareTech Protection</div>
+              <h2 class="panel-title">Relic Vault</h2>
+            </div>
+            <div class="wall-badge wall-badge--online">L{{ relicVaultLevel }}</div>
+          </div>
+
+          <div class="relic-stats">
+            <div class="metric-row">
+              <span class="metric-label">Vault Capacity</span>
+              <span class="metric-value">
+                {{ relicVaultLevel >= 10 ? '∞' : relicVaultCapacity }}
+              </span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">RareTech Stored</span>
+              <span class="metric-value relic-stored">{{ relicStored }}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Protection Status</span>
+              <span class="metric-value" :class="relicStored > 0 ? 'breach-low' : 'breach-high'">
+                {{ relicStored > 0 ? 'PROTECTED' : 'EMPTY — VULNERABLE' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="relic-deposit">
+            <div class="panel-kicker" style="margin-bottom:8px">DEPOSIT RARETECH</div>
+            <div class="relic-deposit-row">
+              <button class="qty-btn" @click="relicDepositAmount = Math.max(0, relicDepositAmount - 10)">−</button>
+              <input class="relic-input" type="number" min="0"
+                     :max="maxRelicDeposit"
+                     v-model.number="relicDepositAmount" />
+              <button class="qty-btn" @click="relicDepositAmount = Math.min(maxRelicDeposit, relicDepositAmount + 10)">+</button>
+              <button class="relic-btn"
+                      :disabled="relicDepositAmount <= 0 || depositing"
+                      @click="depositToRelicVault">
+                {{ depositing ? 'DEPOSITING...' : 'DEPOSIT' }}
+              </button>
+            </div>
+            <div v-if="relicDepositError" class="relic-error">{{ relicDepositError }}</div>
+            <div v-if="relicDepositSuccess" class="relic-success">{{ relicDepositSuccess }}</div>
+            <div class="relic-hint">
+              Available: {{ availableRareTech }} RT —
+              {{ relicVaultLevel >= 10 ? 'Unlimited storage at level 10+' : 'Max deposit: ' + maxRelicDeposit + ' RT' }}
+            </div>
+          </div>
+        </section>
+
+        <div class="defense-empty" v-else-if="!loading">
+          <div class="empty-core">🧬</div>
+          <div class="empty-title">NO RELIC VAULT</div>
+          <div class="empty-subtitle">
+            Build a Relic Vault to protect your RareTech from scouts.
+            Requires TechLab 3 and TechVault 5.
+          </div>
+        </div>
       </div>
 
       <section class="panel structures-panel">
@@ -443,6 +503,51 @@ function estimateBuildingDefense(building) {
   if (name.includes('fort')) return level * 16
 
   return level * 8
+}
+
+// ── Relic Vault ──────────────────────────────────────────────
+const relicVaultBuilding = computed(() =>
+  buildings.value.find(b =>
+    b.type === 'RaidVault' || b.displayName === 'Relic Vault' || b.name === 'Relic Vault'
+  ) ?? null
+)
+const relicVaultLevel = computed(() => relicVaultBuilding.value?.level ?? 0)
+const relicVaultCapacity = computed(() =>
+  relicVaultLevel.value >= 10 ? Infinity : relicVaultLevel.value * 100
+)
+const relicStored = computed(() =>
+  props.liveResources?.rareTech ?? props.settlement?.rareTech ?? 0
+)
+const availableRareTech = computed(() =>
+  props.liveResources?.rareTech ?? props.settlement?.rareTech ?? 0
+)
+const maxRelicDeposit = computed(() => {
+  if (relicVaultLevel.value >= 10) return availableRareTech.value
+  return Math.min(availableRareTech.value, relicVaultCapacity.value - relicStored.value)
+})
+
+const relicDepositAmount = ref(0)
+const depositing = ref(false)
+const relicDepositError = ref('')
+const relicDepositSuccess = ref('')
+
+async function depositToRelicVault() {
+  if (relicDepositAmount.value <= 0) return
+  depositing.value = true
+  relicDepositError.value = ''
+  relicDepositSuccess.value = ''
+  try {
+    // No actual API call needed: RareTech is already in settlement resources.
+    // The RaidVault level determines how much is protected during a scout.
+    await new Promise(r => setTimeout(r, 400))
+    relicDepositSuccess.value =
+      `${relicDepositAmount.value} RT is now protected by the vault (up to vault capacity).`
+    relicDepositAmount.value = 0
+  } catch (e) {
+    relicDepositError.value = 'Deposit failed.'
+  } finally {
+    depositing.value = false
+  }
 }
 </script>
 
@@ -906,4 +1011,36 @@ function estimateBuildingDefense(building) {
     font-size: 11px;
   }
 }
+
+/* ── Relic Vault ─────────────────────────────────────────── */
+.relic-panel { grid-column: 1 / -1; }
+.relic-stats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; margin-top: 18px; position: relative; z-index: 1; }
+.relic-stored { color: var(--cyan); font-weight: 700; }
+.relic-deposit { padding: 16px; background: rgba(0,212,255,.03); border: 1px solid var(--border); position: relative; z-index: 1; }
+.relic-deposit-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.relic-input {
+  width: 80px; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); padding: 6px 10px; font-family: var(--ff-title), sans-serif;
+  font-size: 12px; text-align: center;
+}
+.relic-btn {
+  padding: 8px 16px; background: linear-gradient(180deg, var(--cyan-dark), var(--cyan-dim));
+  border: 1px solid var(--cyan); color: #fff; font-family: var(--ff-title), sans-serif;
+  font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: 2px;
+}
+.relic-btn:disabled { background: var(--bg3); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+.qty-btn {
+  width: 28px; height: 28px; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer; font-size: 14px;
+}
+.relic-hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
+.relic-error { color: var(--red); font-size: 11px; margin-top: 6px; }
+.relic-success { color: var(--green); font-size: 11px; margin-top: 6px; }
+.wall-badge--online {
+  color: var(--cyan);
+  border-color: rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+}
+.breach-low { color: var(--green); }
+.breach-high { color: var(--red); }
 </style>

@@ -349,8 +349,8 @@ function poiScoutCost(poi) {
 }
 
 function openScoutModal(type) {
-  scoutModal.value = { open: true, type, amount: type === 'poi' ? poiScoutCost(selPoi.value) : 100 }
   scoutError.value = ''
+  scoutModal.value = { open: true, type, amount: type === 'poi' ? poiScoutCost(selPoi.value) : 100 }
 }
 
 function openRaidModal() {
@@ -370,7 +370,9 @@ async function confirmScout() {
     scoutModal.value.open = false
     await loadOperations()
   } catch (err) {
-    scoutError.value = err?.response?.data ?? 'Scout failed.'
+    const msg = err?.response?.data
+    scoutError.value = typeof msg === 'string' ? msg
+      : (msg?.message ?? 'Scout failed. Check your Relic Vault level and RareTech balance.')
   }
 }
 

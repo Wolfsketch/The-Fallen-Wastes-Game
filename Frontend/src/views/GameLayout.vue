@@ -369,7 +369,8 @@ async function loadSettlementData() {
       scrap: data.resources?.scrap ?? 0,
       fuel: data.resources?.fuel ?? 0,
       energy: data.resources?.energy ?? 0,
-      rareTech: data.resources?.rareTech ?? 0
+      rareTech: data.resources?.rareTech ?? 0,
+      unitInventory: data.unitInventory ?? data.UnitInventory ?? settlement.value?.unitInventory ?? {}
     }
   } catch (err) {
     console.error('Failed to load settlement data', err)
@@ -412,7 +413,8 @@ function setPlayerData(data) {
       scrap: s.scrap ?? s.resources?.scrap ?? 0,
       fuel: s.fuel ?? s.resources?.fuel ?? 0,
       energy: s.energy ?? s.resources?.energy ?? 0,
-      rareTech: s.rareTech ?? s.resources?.rareTech ?? 0
+      rareTech: s.rareTech ?? s.resources?.rareTech ?? 0,
+      unitInventory: s.unitInventory ?? s.UnitInventory ?? {}
     }
   }
 }

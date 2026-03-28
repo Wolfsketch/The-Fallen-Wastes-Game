@@ -32,9 +32,12 @@
             <span class="sidebar-count">{{ sentMessages.length }}</span>
           </button>
 
-          <button :class="['sidebar-tab', { 'sidebar-tab--active': activeFolder === 'reports' }]"
-                  @click="activeFolder = 'reports'">
-            📋 Reports
+          <button
+              class="sidebar-tab"
+              :class="{ 'sidebar-tab--active': activeFolder === 'reports' }"
+              @click="switchFolder('reports')"
+          >
+            REPORTS
             <span class="sidebar-count">{{ reportMessages.length }}</span>
           </button>
         </div>
@@ -598,7 +601,7 @@ watch(() => route.query, () => {
 
 .messages-layout {
   display: grid;
-  grid-template-columns: 330px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 14px;
   min-height: calc(100vh - 230px);
 }
@@ -999,6 +1002,8 @@ watch(() => route.query, () => {
 }
 
 .sidebar-tab {
+  flex: 1;
+  justify-content: center;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1008,7 +1013,7 @@ watch(() => route.query, () => {
   font-family: var(--ff-title);
   font-size: 9px;
   letter-spacing: 2px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   transition: all .15s;
 }
