@@ -371,7 +371,15 @@ const operations = ref([])
 
 // Glow enkel wanneer iemand AANWEZIG is (phase === 'arrived')
 const arrivedPoiIds = computed(() =>
-    new Set(operations.value.filter(op => op.phase === 'arrived' && op.poiId).map(op => op.poiId))
+  new Set(
+    operations.value
+      .filter(op =>
+        op.phase === 'arrived' &&
+        op.poiId &&
+        (op.operationType === 'raid_poi' || op.operationType === 'reinforce_poi')
+      )
+      .map(op => op.poiId)
+  )
 )
 
 const ownArrivedAtSelectedPoi = computed(() => {
@@ -527,7 +535,6 @@ async function confirmScout() {
                             estimatedTravelSeconds.value ?? 120)
     }
     scoutModal.value.open = false
-    if (props.refreshSettlement) await props.refreshSettlement()
 
     // Inject local operation immediately so line appears without waiting for poll
     const ownSlot = slots.value.find(s => s.status === 'yours')
@@ -558,7 +565,7 @@ async function confirmScout() {
       renderMap()
     }
 
-    await loadOperations()
+    if (props.refreshSettlement) await props.refreshSettlement()
   } catch (err) {
     const msg = err?.response?.data
     scoutError.value = typeof msg === 'string' ? msg
@@ -611,13 +618,17 @@ async function loadOperations() {
     }))
 
     // Keep currently-animating outbound ops not yet in the new data
-    const existingOutbound = operations.value.filter(op =>
-      op.phase === 'outbound' &&
-      !newOps.some(n => n.id === op.id) &&
-      // Keep local ops only if no real op with same poiId/type exists yet
-      !(String(op.id).startsWith('local-') &&
-        newOps.some(n => n.poiId === op.poiId && n.operationType === op.operationType))
-    )
+    const existingOutbound = operations.value.filter(op => {
+      if (op.phase !== 'outbound') return false
+      // If this op is now in the new backend data, use the backend version
+      if (newOps.some(n => n.id === op.id)) return false
+      // For local ops: keep alive until travel time has elapsed
+      if (String(op.id).startsWith('local-')) {
+        const elapsed = Date.now() - op.startTime
+        return elapsed < op.travelDuration
+      }
+      return true
+    })
 
     operations.value = [...newOps, ...existingOutbound]
     operations.value.forEach(op => {
@@ -721,7 +732,6 @@ async function confirmAttack() {
                              estimatedTravelSeconds.value ?? 120)
     }
     attackModal.value.open = false
-    if (props.refreshSettlement) await props.refreshSettlement()
 
     const ownSlotA = slots.value.find(s => s.status === 'yours')
     const targetPoiA = attackModal.value.type === 'poi' ? selPoi.value : null
@@ -756,7 +766,7 @@ async function confirmAttack() {
       renderMap()
     }
 
-    await loadOperations()
+    if (props.refreshSettlement) await props.refreshSettlement()
   } catch (err) {
     modal.error = err?.response?.data ?? 'Attack failed.'
   }
