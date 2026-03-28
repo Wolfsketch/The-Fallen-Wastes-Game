@@ -58,8 +58,10 @@ namespace TheFallenWastes_WebAPI.Controllers
         public async Task<IActionResult> GetOperationsForSettlement(Guid settlementId)
         {
             var operations = await _db.Operations
-                .Where(o => o.Phase != "completed" &&
-                            (o.AttackerSettlementId == settlementId || o.TargetSettlementId == settlementId))
+                .Where(o => (o.Phase != "completed" ||
+                             (o.OperationType == "scout_poi" &&
+                              o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24)))
+                            && (o.AttackerSettlementId == settlementId || o.TargetSettlementId == settlementId))
                 .ToListAsync();
 
             var now = DateTime.UtcNow;
@@ -149,7 +151,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                 .ToDictionaryAsync(s => s.Id, s => s.Name);
 
             var result = operations
-                .Where(o => o.Phase != "completed")
+                .Where(o => o.Phase != "completed" ||
+                            (o.OperationType == "scout_poi" &&
+                             o.CompletedAtUtc >= DateTime.UtcNow.AddHours(-24)))
                 .Select(o =>
                 {
                     var sentUnits = string.IsNullOrEmpty(o.SentUnitsJson)
@@ -175,6 +179,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                         o.AttackerSettlementId,
                         o.TargetSettlementId,
                         o.TargetPoiId,
+                        o.TargetPoiLabel,
                         OriginSettlementName = settlementNames.GetValueOrDefault(o.AttackerSettlementId, "Unknown"),
                         TargetName = targetName,
                         SentUnits = sentUnits,
@@ -260,7 +265,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: request.RareTechAmount,
                 raidMode: null,
-                travelSeconds: 60);
+                travelSeconds: Math.Max(30, Math.Min(86400, request.TravelSeconds)));
 
             // Operation starts as "outbound" — resolved when GET is polled after ArrivesAtUtc
 
@@ -414,13 +419,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                     settlement.UnitInventory.Remove(kvp.Key);
             }
 
-            int travelSeconds = request.RaidMode switch
-            {
-                "sweep" => 900,
-                "extraction" => 3600,
-                "deep" => 14400,
-                _ => 300  // "quick" or default
-            };
+            int travelSeconds = Math.Max(30, Math.Min(86400, request.TravelSeconds));
 
             var sentUnitsJson = JsonSerializer.Serialize(request.Units);
             var operation = new Operation(
@@ -487,7 +486,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: null,
                 raidMode: null,
-                travelSeconds: 120);
+                travelSeconds: Math.Max(30, Math.Min(86400, request.TravelSeconds)));
 
             _db.Operations.Add(operation);
             await _db.SaveChangesAsync();
@@ -541,7 +540,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: null,
                 raidMode: null,
-                travelSeconds: 120);
+                travelSeconds: Math.Max(30, Math.Min(86400, request.TravelSeconds)));
 
             _db.Operations.Add(operation);
             await _db.SaveChangesAsync();
@@ -554,19 +553,21 @@ namespace TheFallenWastes_WebAPI.Controllers
             });
         }
 
-        // ─── Request DTOs ────────────────────────────────────────────────
+        // ─── Request DTOs
 
         public class ScoutPoiRequest
         {
             public string TargetPoiId { get; set; } = string.Empty;
             public int RareTechAmount { get; set; }
             public string TargetPoiLabel { get; set; } = string.Empty;
+            public int TravelSeconds { get; set; } = 60;
         }
 
         public class ScoutSettlementRequest
         {
             public Guid TargetSettlementId { get; set; }
             public int RareTechAmount { get; set; }
+            public int TravelSeconds { get; set; } = 120;
         }
 
         public class AttackPoiRequest
@@ -574,18 +575,21 @@ namespace TheFallenWastes_WebAPI.Controllers
             public string TargetPoiId { get; set; } = string.Empty;
             public Dictionary<string, int> Units { get; set; } = new();
             public string RaidMode { get; set; } = "quick";
+            public int TravelSeconds { get; set; } = 300;
         }
 
         public class AttackSettlementRequest
         {
             public Guid TargetSettlementId { get; set; }
             public Dictionary<string, int> Units { get; set; } = new();
+            public int TravelSeconds { get; set; } = 120;
         }
 
         public class ReinforcePoiRequest
         {
             public string TargetPoiId { get; set; } = string.Empty;
             public Dictionary<string, int> Units { get; set; } = new();
+            public int TravelSeconds { get; set; } = 120;
         }
 
         // ─── NPC unit generation ──────────────────────────────────────────────
