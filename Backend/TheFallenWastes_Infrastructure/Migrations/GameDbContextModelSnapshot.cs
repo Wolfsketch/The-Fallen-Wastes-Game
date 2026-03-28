@@ -197,6 +197,9 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<string>("TargetPoiId")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TargetPoiLabel")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("TargetSettlementId")
                         .HasColumnType("uniqueidentifier");
 
@@ -295,6 +298,30 @@ namespace TheFallenWastes_Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("PlayerRelations");
+                });
+
+            modelBuilder.Entity("TheFallenWastes_Domain.Entities.PoiState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ClearedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCleared")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("NextRespawnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PoiId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PoiStates");
                 });
 
             modelBuilder.Entity("TheFallenWastes_Domain.Entities.Research", b =>

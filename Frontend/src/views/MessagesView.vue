@@ -139,11 +139,12 @@
         </div>
 
         <div v-else-if="selectedMessage" class="message-detail">
-          <div class="content-topbar">
+          <div class="content-topbar content-topbar--detail">
             <div>
               <div class="content-title">{{ selectedMessage.subject }}</div>
               <div class="content-sub">Encrypted settlement communication</div>
             </div>
+            <button class="msg-delete-btn" @click="deleteCurrentMessage" title="Delete message">🗑 Delete</button>
           </div>
 
           <div class="detail-meta-grid">
@@ -209,7 +210,8 @@ import {
   searchPlayers,
   getUnreadMessageCount,
   markMessageAsRead,
-  getReportMessages
+  getReportMessages,
+  deleteMessage
 } from '../services/api.js'
 
 const route = useRoute()
@@ -288,6 +290,21 @@ async function loadReports() {
 async function loadAllMessages() {
   await Promise.all([loadInbox(), loadSent(), loadReports()])
   await emitUnreadRefresh()
+}
+
+async function deleteCurrentMessage() {
+  if (!selectedMessage.value) return
+  const playerId = sessionStorage.getItem('playerId')
+  if (!playerId) return
+  try {
+    await deleteMessage(selectedMessage.value.id, playerId)
+    inboxMessages.value = inboxMessages.value.filter(m => m.id !== selectedMessage.value.id)
+    sentMessages.value = sentMessages.value.filter(m => m.id !== selectedMessage.value.id)
+    reportMessages.value = reportMessages.value.filter(m => m.id !== selectedMessage.value.id)
+    selectedMessage.value = null
+  } catch (e) {
+    console.error('Delete failed', e)
+  }
 }
 
 function getMessageIcon(msg) {
@@ -741,6 +758,29 @@ watch(() => route.query, () => {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(90deg, rgba(0,212,255,.05), transparent);
+}
+
+.content-topbar--detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.msg-delete-btn {
+  background: rgba(255,48,64,.08);
+  border: 1px solid rgba(255,48,64,.3);
+  color: #ff4040;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-family: var(--ff);
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+
+.msg-delete-btn:hover {
+  background: rgba(255,48,64,.18);
 }
 
 .content-title {

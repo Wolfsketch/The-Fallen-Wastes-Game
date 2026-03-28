@@ -217,9 +217,9 @@ export async function getSettlementOperations(settlementId) {
     return response.data
 }
 
-export async function scoutPoi(settlementId, targetPoiId, rareTechAmount) {
+export async function scoutPoi(settlementId, targetPoiId, rareTechAmount, targetPoiLabel = '') {
     const response = await api.post(`/Operations/settlement/${settlementId}/scout-poi`,
-        { targetPoiId, rareTechAmount })
+        { targetPoiId, rareTechAmount, targetPoiLabel })
     return response.data
 }
 
@@ -247,8 +247,18 @@ export async function reinforcePoi(settlementId, targetPoiId, units) {
     return response.data
 }
 
+export async function getPoiStates() {
+    const response = await api.get('/Operations/poi-states')
+    return response.data
+}
+
 export async function depositToVault(settlementId, amount) {
     const response = await api.post(`/Settlements/${settlementId}/vault/deposit`, { amount })
+    return response.data
+}
+
+export async function deleteMessage(messageId, playerId) {
+    const response = await api.delete(`/Messages/${messageId}/player/${playerId}`)
     return response.data
 }
 

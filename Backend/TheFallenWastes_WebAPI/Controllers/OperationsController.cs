@@ -24,6 +24,33 @@ namespace TheFallenWastes_WebAPI.Controllers
         }
 
         // ═══════════════════════════════════════════════════════════════════
+        // GET /api/Operations/poi-states
+        // Returns all POI states; auto-respawns any cleared POIs past their timer
+        // ═══════════════════════════════════════════════════════════════════
+        [HttpGet("poi-states")]
+        public async Task<IActionResult> GetPoiStates()
+        {
+            var states = await _db.PoiStates.ToListAsync();
+            var now = DateTime.UtcNow;
+
+            foreach (var s in states.Where(s => s.ShouldRespawn()))
+                s.Respawn();
+
+            await _db.SaveChangesAsync();
+
+            return Ok(states.Select(s => new
+            {
+                s.PoiId,
+                s.IsCleared,
+                s.ClearedAtUtc,
+                s.NextRespawnUtc,
+                RespawnInSeconds = s.IsCleared
+                    ? (int)Math.Max(0, (s.NextRespawnUtc - now).TotalSeconds)
+                    : 0
+            }));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // GET /api/Operations/settlement/{settlementId}
         // Returns all active (non-completed) operations for this settlement
         // ═══════════════════════════════════════════════════════════════════
@@ -74,13 +101,28 @@ namespace TheFallenWastes_WebAPI.Controllers
                         if (settlementToPlayer.TryGetValue(op.AttackerSettlementId, out var playerId))
                         {
                             var unitLines = string.Join(", ", npcUnits.Select(u => $"{u.Value}x {u.Key}"));
+                            string poiName = !string.IsNullOrEmpty(op.TargetPoiLabel)
+                                ? op.TargetPoiLabel
+                                : op.TargetPoiId ?? "Unknown POI";
                             _db.Messages.Add(new Message(
                                 senderPlayerId: playerId,
                                 receiverPlayerId: playerId,
-                                subject: $"Scout Report \u2014 {op.TargetPoiId}",
-                                body: $"Scout of {op.TargetPoiId} returned. Tier {tier} POI. Defenders: {unitLines}.",
+                                subject: $"Scout Report \u2014 {poiName}",
+                                body: $"Scout of {poiName} returned. Tier {tier} POI. Defenders: {unitLines}.",
                                 messageType: "report"));
                         }
+                    }
+
+                    if (op.OperationType == "raid_poi")
+                    {
+                        var poiState = await _db.PoiStates
+                            .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
+                        if (poiState == null)
+                        {
+                            poiState = new PoiState(op.TargetPoiId ?? "unknown");
+                            _db.PoiStates.Add(poiState);
+                        }
+                        poiState.MarkCleared();
                     }
 
                     op.MarkArrived();
@@ -183,6 +225,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 attackerSettlementId: settlementId,
                 targetSettlementId: null,
                 targetPoiId: request.TargetPoiId,
+                targetPoiLabel: request.TargetPoiLabel,
                 operationType: "scout_poi",
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: request.RareTechAmount,
@@ -235,6 +278,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 attackerSettlementId: settlementId,
                 targetSettlementId: request.TargetSettlementId,
                 targetPoiId: null,
+                targetPoiLabel: null,
                 operationType: "scout_settlement",
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: request.RareTechAmount,
@@ -353,6 +397,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 attackerSettlementId: settlementId,
                 targetSettlementId: null,
                 targetPoiId: request.TargetPoiId,
+                targetPoiLabel: null,
                 operationType: "raid_poi",
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: null,
@@ -407,6 +452,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 attackerSettlementId: settlementId,
                 targetSettlementId: request.TargetSettlementId,
                 targetPoiId: null,
+                targetPoiLabel: null,
                 operationType: "attack_settlement",
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: null,
@@ -460,6 +506,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 attackerSettlementId: settlementId,
                 targetSettlementId: null,
                 targetPoiId: request.TargetPoiId,
+                targetPoiLabel: null,
                 operationType: "reinforce_poi",
                 sentUnitsJson: sentUnitsJson,
                 scoutRareTech: null,
@@ -483,6 +530,7 @@ namespace TheFallenWastes_WebAPI.Controllers
         {
             public string TargetPoiId { get; set; } = string.Empty;
             public int RareTechAmount { get; set; }
+            public string TargetPoiLabel { get; set; } = string.Empty;
         }
 
         public class ScoutSettlementRequest

@@ -140,7 +140,9 @@ namespace TheFallenWastes_WebAPI.Controllers
         public async Task<IActionResult> GetSent(Guid playerId)
         {
             var messages = await _db.Messages
-                .Where(m => m.SenderPlayerId == playerId)
+                .Where(m => m.SenderPlayerId == playerId
+                         && m.MessageType != "report"
+                         && m.MessageType != "notification")
                 .OrderByDescending(m => m.SentAtUtc)
                 .ToListAsync();
 
@@ -168,6 +170,20 @@ namespace TheFallenWastes_WebAPI.Controllers
             });
 
             return Ok(result);
+        }
+
+        [HttpDelete("{messageId}/player/{playerId}")]
+        public async Task<IActionResult> DeleteMessage(Guid messageId, Guid playerId)
+        {
+            var message = await _db.Messages.FindAsync(messageId);
+            if (message == null) return NotFound();
+
+            if (message.SenderPlayerId != playerId && message.ReceiverPlayerId != playerId)
+                return Forbid();
+
+            _db.Messages.Remove(message);
+            await _db.SaveChangesAsync();
+            return Ok(new { deleted = true });
         }
 
         [HttpPost("send")]

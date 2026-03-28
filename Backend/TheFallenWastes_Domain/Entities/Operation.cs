@@ -8,6 +8,7 @@ namespace TheFallenWastes_Domain.Entities
         public Guid AttackerSettlementId { get; private set; }
         public Guid? TargetSettlementId { get; private set; }   // null = POI aanval
         public string? TargetPoiId { get; private set; }         // null = settlement aanval
+        public string? TargetPoiLabel { get; private set; }        // human-readable POI name
 
         public string OperationType { get; private set; }
         // values: "scout_poi", "scout_settlement", "raid_poi", "attack_settlement", "reinforce_poi"
@@ -38,6 +39,7 @@ namespace TheFallenWastes_Domain.Entities
             Guid attackerSettlementId,
             Guid? targetSettlementId,
             string? targetPoiId,
+            string? targetPoiLabel,
             string operationType,
             string sentUnitsJson,
             int? scoutRareTech,
@@ -48,6 +50,7 @@ namespace TheFallenWastes_Domain.Entities
             AttackerSettlementId = attackerSettlementId;
             TargetSettlementId = targetSettlementId;
             TargetPoiId = targetPoiId;
+            TargetPoiLabel = targetPoiLabel;
             OperationType = operationType;
             Phase = "outbound";
             SentUnitsJson = sentUnitsJson;

@@ -152,9 +152,12 @@
           <div class="sp-actions">
             <div class="sa-w">
               <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
-              <button class="sa sa--raid" @click="openAttackModal('poi')">⚔ Raid</button>
+              <button class="sa sa--raid" @click="openAttackModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">⚔ Raid</button>
               <button v-if="selectedPoiHasNonOwnArrival" class="sa sa--reinforce" @click="openReinforceModal">⛊ Reinforce</button>
             </div>
+          </div>
+          <div v-if="poiStates[selPoi.id]?.isCleared" class="poi-cleared-badge">
+            ⏳ CLEARED — Respawning in {{ formatTravelTime(poiStates[selPoi.id]?.respawnInSeconds) }}
           </div>
         </div>
       </div>
@@ -286,6 +289,22 @@
         </div>
       </div>
     </transition>
+
+    <!-- Combat result popup -->
+    <div v-if="combatResult" class="modal-backdrop" @click.self="combatResult = null">
+      <div class="wl-modal">
+        <div class="modal-header">
+          <span class="modal-title">⚔️ FORCES ARRIVED — {{ combatResult.poiId }}</span>
+          <button class="modal-close" @click="combatResult = null">✕</button>
+        </div>
+        <div class="modal-body" style="padding:16px; font-size:11px; color:var(--text)">
+          {{ combatResult.units }} have arrived at the target location.
+        </div>
+        <div class="modal-footer">
+          <button class="modal-confirm" @click="combatResult = null">CLOSE</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -293,7 +312,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
-import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi } from '../services/api.js'
+import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 
@@ -371,6 +390,8 @@ const raidModes = [
 const scoutError = ref('')
 const scoutReport = ref(null)
 const shownReportIds = new Set()
+const poiStates = ref({})
+const combatResult = ref(null)
 const attackModal = ref({
   open: false, type: 'poi', raidMode: 'quick',
   selectedUnits: {}, error: '', isReinforce: false
@@ -444,7 +465,12 @@ async function confirmScout() {
   scoutError.value = ''
   try {
     if (modal.type === 'poi' && selPoi.value) {
-      await scoutPoi(props.settlement.id, selPoi.value.id, modal.amount)
+      await scoutPoi(
+        props.settlement.id,
+        selPoi.value.id,
+        modal.amount,
+        selPoi.value.label ?? selPoi.value.id
+      )
     } else if (modal.type === 'settlement' && sel.value?.id) {
       await scoutSettlement(props.settlement.id, sel.value.id, modal.amount)
     }
@@ -505,6 +531,13 @@ async function loadOperations() {
         if (slot) { op.destX = slot.x; op.destY = slot.y }
       }
     })
+
+    const unresolved = operations.value.filter(op => op.isOwn && op.originX === 0 && op.originY === 0)
+    if (unresolved.length > 0) {
+      console.warn('Operations with unresolved coordinates:', unresolved.map(o => o.id))
+      console.log('Own slot found:', slots.value.find(s => s.status === 'yours'))
+    }
+
     operations.value.forEach(op => {
       if (op.operationType === 'scout_poi' && op.phase === 'arrived' && op.resultJson
           && !shownReportIds.has(op.id)) {
@@ -520,10 +553,28 @@ async function loadOperations() {
           }
         } catch {}
       }
+      if (op.operationType === 'raid_poi' && op.phase === 'arrived'
+          && !shownReportIds.has(op.id)) {
+        shownReportIds.add(op.id)
+        combatResult.value = {
+          poiId: op.poiId,
+          units: op.unitSummary ?? 'Unknown forces',
+          status: 'ARRIVED'
+        }
+      }
     })
+    renderMap()
   } catch (e) {
     console.error('Failed to load operations:', e)
   }
+}
+
+async function loadPoiStates() {
+  try {
+    const data = await getPoiStates()
+    poiStates.value = {}
+    ;(data || []).forEach(s => { poiStates.value[s.poiId] = s })
+  } catch {}
 }
 
 function openAttackModal(type) {
@@ -829,9 +880,10 @@ onMounted(async () => {
     }
   }
   else {
-    // Load real operations from backend and poll every 15 s
+    // Load real operations from backend and poll every 5 s
     await loadOperations()
-    setInterval(loadOperations, 5000)
+    await loadPoiStates()
+    setInterval(async () => { await loadOperations(); await loadPoiStates() }, 5000)
   }
 
   frameInterval = setInterval(() => {
@@ -1047,6 +1099,8 @@ onUnmounted(() => {
 .qty-btn:hover{border-color:var(--border-bright);background:rgba(0,212,255,.12)}
 .sa--reinforce{background:rgba(48,255,128,.08);border-color:rgba(48,255,128,.3);color:#30ff80}
 .sa--reinforce:hover{box-shadow:0 0 10px rgba(48,255,128,.2)}
+.sa--raid:disabled{opacity:.35;cursor:not-allowed}
+.poi-cleared-badge{font-size:10px;color:#ff9040;font-family:var(--ff-title);letter-spacing:1px;padding:2px 8px;border:1px solid rgba(255,144,64,.3);background:rgba(255,144,64,.05)}
 .modal-box--wide{width:min(560px,94vw)}
 .modal-unit-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
 .modal-unit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);background:rgba(0,212,255,.02)}
