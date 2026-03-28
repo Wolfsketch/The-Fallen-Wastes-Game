@@ -46,7 +46,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                 s.NextRespawnUtc,
                 RespawnInSeconds = s.IsCleared
                     ? (int)Math.Max(0, (s.NextRespawnUtc - now).TotalSeconds)
-                    : 0
+                    : 0,
+                NpcUnits = string.IsNullOrEmpty(s.NpcUnitsJson) ? null
+                    : JsonSerializer.Deserialize<Dictionary<string, int>>(s.NpcUnitsJson),
+                LootItems = string.IsNullOrEmpty(s.LootItemsJson) ? null
+                    : JsonSerializer.Deserialize<List<string>>(s.LootItemsJson)
             }));
         }
 
@@ -88,23 +92,48 @@ namespace TheFallenWastes_WebAPI.Controllers
                 {
                     if (op.OperationType == "scout_poi")
                     {
-                        var npcUnits = GenerateNpcUnits(op.TargetPoiId ?? "unknown");
-                        int tier = npcUnits.Values.Sum() > 20 ? 3 : npcUnits.Values.Sum() > 10 ? 2 : 1;
-                        var lootItems = GeneratePoiLoot(op.TargetPoiId ?? "unknown", tier);
+                        var scoutPoiState = await _db.PoiStates
+                            .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
+                        if (scoutPoiState == null)
+                        {
+                            scoutPoiState = new PoiState(op.TargetPoiId ?? "unknown");
+                            _db.PoiStates.Add(scoutPoiState);
+                        }
+
+                        if (!scoutPoiState.IsInitialized)
+                        {
+                            var genNpcUnits = GenerateNpcUnits(op.TargetPoiId ?? "unknown");
+                            int genTier = genNpcUnits.Values.Sum() > 20 ? 3 : genNpcUnits.Values.Sum() > 10 ? 2 : 1;
+                            var genLootItems = GeneratePoiLoot(op.TargetPoiId ?? "unknown", genTier);
+                            scoutPoiState.Initialize(
+                                JsonSerializer.Serialize(genNpcUnits),
+                                JsonSerializer.Serialize(genLootItems));
+                        }
+
+                        var currentNpcUnits = string.IsNullOrEmpty(scoutPoiState.NpcUnitsJson)
+                            ? new Dictionary<string, int>()
+                            : JsonSerializer.Deserialize<Dictionary<string, int>>(scoutPoiState.NpcUnitsJson)
+                              ?? new Dictionary<string, int>();
+                        var currentLootItems = string.IsNullOrEmpty(scoutPoiState.LootItemsJson)
+                            ? new List<string>()
+                            : JsonSerializer.Deserialize<List<string>>(scoutPoiState.LootItemsJson)
+                              ?? new List<string>();
+
+                        int tier = currentNpcUnits.Values.Sum() > 20 ? 3 : currentNpcUnits.Values.Sum() > 10 ? 2 : 1;
                         var resultJson = JsonSerializer.Serialize(new
                         {
                             success = true,
                             poiId = op.TargetPoiId,
-                            npcUnits,
-                            tier,
-                            lootItems
+                            npcUnits = currentNpcUnits,
+                            lootItems = currentLootItems,
+                            tier
                         });
                         op.SetResult(resultJson);
 
                         // Send report message to attacker player on arrival
                         if (settlementToPlayer.TryGetValue(op.AttackerSettlementId, out var playerId))
                         {
-                            var unitLines = string.Join(", ", npcUnits.Select(u => $"{u.Value}x {u.Key}"));
+                            var unitLines = string.Join(", ", currentNpcUnits.Select(u => $"{u.Value}x {u.Key}"));
                             string poiName = !string.IsNullOrEmpty(op.TargetPoiLabel)
                                 ? op.TargetPoiLabel
                                 : op.TargetPoiId ?? "Unknown POI";
@@ -119,14 +148,137 @@ namespace TheFallenWastes_WebAPI.Controllers
 
                     if (op.OperationType == "raid_poi")
                     {
-                        var poiState = await _db.PoiStates
+                        var raidPoiState = await _db.PoiStates
                             .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
-                        if (poiState == null)
+                        if (raidPoiState == null)
                         {
-                            poiState = new PoiState(op.TargetPoiId ?? "unknown");
-                            _db.PoiStates.Add(poiState);
+                            raidPoiState = new PoiState(op.TargetPoiId ?? "unknown");
+                            _db.PoiStates.Add(raidPoiState);
                         }
-                        poiState.MarkCleared();
+
+                        if (!raidPoiState.IsInitialized)
+                        {
+                            var genNpcUnits = GenerateNpcUnits(op.TargetPoiId ?? "unknown");
+                            int genTier = genNpcUnits.Values.Sum() > 20 ? 3 : genNpcUnits.Values.Sum() > 10 ? 2 : 1;
+                            var genLootItems = GeneratePoiLoot(op.TargetPoiId ?? "unknown", genTier);
+                            raidPoiState.Initialize(
+                                JsonSerializer.Serialize(genNpcUnits),
+                                JsonSerializer.Serialize(genLootItems));
+                        }
+
+                        // Load attacker units
+                        var attackerSentUnits = string.IsNullOrEmpty(op.SentUnitsJson)
+                            ? new Dictionary<string, int>()
+                            : JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson)
+                              ?? new Dictionary<string, int>();
+
+                        // Load all unit definitions for combat stats
+                        var allUnitDefs = TheFallenWastes_Domain.UnitFactory.UnitFactory.CreateStarterUnits()
+                            .ToDictionary(u => u.Name, u => u);
+
+                        // Simple combat: sum attacker total attack vs NPC total defense
+                        int attackerTotalAttack = attackerSentUnits
+                            .Sum(kvp => (allUnitDefs.TryGetValue(kvp.Key, out var ua) ? ua.AttackPower : 10) * kvp.Value);
+
+                        var raidNpcUnits = string.IsNullOrEmpty(raidPoiState.NpcUnitsJson)
+                            ? new Dictionary<string, int>()
+                            : JsonSerializer.Deserialize<Dictionary<string, int>>(raidPoiState.NpcUnitsJson)
+                              ?? new Dictionary<string, int>();
+
+                        int npcTotalDefense = raidNpcUnits
+                            .Sum(kvp => (allUnitDefs.TryGetValue(kvp.Key, out var ud) ? ud.DefenseVsBallistic : 5) * kvp.Value);
+
+                        bool attackerWins = attackerTotalAttack > npcTotalDefense;
+
+                        // Calculate losses (proportional)
+                        var attackerLosses = new Dictionary<string, int>();
+                        var npcLosses = new Dictionary<string, int>();
+
+                        if (attackerWins)
+                        {
+                            npcLosses = raidNpcUnits.ToDictionary(k => k.Key, k => k.Value);
+                            double lossRatio = npcTotalDefense > 0
+                                ? Math.Min(0.5, (double)npcTotalDefense / attackerTotalAttack) : 0;
+                            foreach (var kvp in attackerSentUnits)
+                            {
+                                int lost = (int)Math.Ceiling(kvp.Value * lossRatio);
+                                if (lost > 0) attackerLosses[kvp.Key] = lost;
+                            }
+                        }
+                        else
+                        {
+                            attackerLosses = attackerSentUnits.ToDictionary(k => k.Key, k => k.Value);
+                            double npcLossRatio = attackerTotalAttack > 0
+                                ? Math.Min(0.7, (double)attackerTotalAttack / npcTotalDefense) : 0;
+                            foreach (var kvp in raidNpcUnits)
+                            {
+                                int lost = (int)Math.Floor(kvp.Value * npcLossRatio);
+                                if (lost > 0) npcLosses[kvp.Key] = lost;
+                            }
+                        }
+
+                        // Apply NPC losses to PoiState
+                        if (npcLosses.Any())
+                            raidPoiState.ApplyNpcLosses(npcLosses);
+
+                        // Calculate surviving attacker units
+                        var survivingAttackerUnits = attackerSentUnits
+                            .ToDictionary(k => k.Key, k => k.Value - (attackerLosses.TryGetValue(k.Key, out var l) ? l : 0))
+                            .Where(k => k.Value > 0)
+                            .ToDictionary(k => k.Key, k => k.Value);
+
+                        var remainingNpcAfterBattle = string.IsNullOrEmpty(raidPoiState.NpcUnitsJson)
+                            ? new Dictionary<string, int>()
+                            : JsonSerializer.Deserialize<Dictionary<string, int>>(raidPoiState.NpcUnitsJson)
+                              ?? new Dictionary<string, int>();
+
+                        var combatResultJson = JsonSerializer.Serialize(new
+                        {
+                            attackerWins,
+                            attackerSentUnits,
+                            attackerLosses,
+                            attackerSurvived = survivingAttackerUnits,
+                            npcLosses,
+                            remainingNpcUnits = remainingNpcAfterBattle
+                        });
+                        op.SetResult(combatResultJson);
+
+                        // Send battle report
+                        var raidAttackerSettlement = await _db.Settlements
+                            .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+                        if (raidAttackerSettlement != null)
+                        {
+                            var raidAttackerPlayer = await _db.Players
+                                .FirstOrDefaultAsync(p => p.Id == raidAttackerSettlement.PlayerId);
+                            if (raidAttackerPlayer != null)
+                            {
+                                string attackerLossText = attackerLosses.Any()
+                                    ? string.Join(", ", attackerLosses.Select(u => $"{u.Value}x {u.Key}"))
+                                    : "none";
+                                string npcLossText = npcLosses.Any()
+                                    ? string.Join(", ", npcLosses.Select(u => $"{u.Value}x {u.Key}"))
+                                    : "none";
+                                var lootCollected = attackerWins && raidPoiState.LootItemsJson != null
+                                    ? JsonSerializer.Deserialize<List<string>>(raidPoiState.LootItemsJson) ?? new List<string>()
+                                    : new List<string>();
+                                _db.Messages.Add(new Message(
+                                    senderPlayerId: raidAttackerPlayer.Id,
+                                    receiverPlayerId: raidAttackerPlayer.Id,
+                                    subject: $"Battle Report \u2014 {op.TargetPoiLabel ?? op.TargetPoiId}",
+                                    body: JsonSerializer.Serialize(new
+                                    {
+                                        poiName = op.TargetPoiLabel ?? op.TargetPoiId,
+                                        attackerWins,
+                                        attackerSentUnits,
+                                        attackerLosses,
+                                        attackerSurvived = survivingAttackerUnits,
+                                        npcLosses,
+                                        remainingNpcUnits = remainingNpcAfterBattle,
+                                        lootCollected
+                                    }),
+                                    messageType: "report"));
+                            }
+                        }
                     }
 
                     op.MarkArrived();

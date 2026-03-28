@@ -144,12 +144,14 @@
               <div class="content-title">{{ selectedMessage.subject }}</div>
               <div class="content-sub">Encrypted settlement communication</div>
             </div>
-            <button class="msg-delete-btn" @click="deleteCurrentMessage" title="Delete message">🗑 Delete</button>
-            <button class="msg-unread-btn"
-                    @click="toggleReadStatus(selectedMessage)"
-                    :title="selectedMessage?.isRead ? 'Mark as unread' : 'Mark as read'">
-              {{ selectedMessage?.isRead ? '● Unread' : '✓ Read' }}
-            </button>
+            <div class="msg-action-btns">
+              <button class="msg-delete-btn" @click="deleteCurrentMessage" title="Delete message">🗑 Delete</button>
+              <button class="msg-unread-btn"
+                      @click="toggleReadStatus(selectedMessage)"
+                      :title="selectedMessage?.isRead ? 'Mark as unread' : 'Mark as read'">
+                {{ selectedMessage?.isRead ? '● Unread' : '✓ Read' }}
+              </button>
+            </div>
           </div>
 
           <div class="detail-meta-grid">
@@ -169,9 +171,52 @@
             </div>
           </div>
 
-          <div class="detail-body">
-            {{ selectedMessage.body }}
+          <!-- BATTLE REPORT -->
+          <div v-if="parsedReportBody?.attackerWins !== undefined" class="report-card">
+            <div class="report-outcome" :class="parsedReportBody.attackerWins ? 'outcome--win' : 'outcome--loss'">
+              {{ parsedReportBody.attackerWins ? '⚔ VICTORY' : '✗ DEFEATED' }}
+            </div>
+            <div class="report-section-title">TARGET</div>
+            <div class="report-poi-name">{{ parsedReportBody.poiName }}</div>
+
+            <div class="report-columns">
+              <div class="report-col">
+                <div class="report-section-title">YOUR FORCES SENT</div>
+                <div v-for="(qty, name) in parsedReportBody.attackerSentUnits" :key="'sent'+name" class="report-unit-row">
+                  <span class="report-unit-icon">{{ getUnitIcon(name) }}</span>
+                  <span class="report-unit-name">{{ name }}</span>
+                  <span class="report-unit-qty">× {{ qty }}</span>
+                </div>
+              </div>
+              <div class="report-col">
+                <div class="report-section-title">LOSSES</div>
+                <div v-for="(qty, name) in parsedReportBody.attackerLosses" :key="'loss'+name" class="report-unit-row report-unit-row--loss">
+                  <span class="report-unit-icon">{{ getUnitIcon(name) }}</span>
+                  <span class="report-unit-name">{{ name }}</span>
+                  <span class="report-unit-qty report-qty--red">-{{ qty }}</span>
+                </div>
+                <div v-if="!Object.keys(parsedReportBody.attackerLosses ?? {}).length"
+                     style="font-size:11px;color:var(--green)">No losses</div>
+              </div>
+            </div>
+
+            <div class="report-section-title" style="margin-top:14px">NPC CASUALTIES</div>
+            <div v-for="(qty, name) in parsedReportBody.npcLosses" :key="'npc'+name" class="report-unit-row">
+              <span class="report-unit-icon">💀</span>
+              <span class="report-unit-name">{{ name }}</span>
+              <span class="report-unit-qty report-qty--orange">-{{ qty }} killed</span>
+            </div>
+
+            <div v-if="parsedReportBody.lootCollected?.length" class="report-loot-box">
+              <div class="report-section-title">LOOT COLLECTED</div>
+              <div v-for="item in parsedReportBody.lootCollected" :key="item" class="report-loot-item">
+                🧬 {{ item }}
+              </div>
+            </div>
           </div>
+
+          <!-- SCOUT REPORT (plain text) -->
+          <div v-else class="detail-body">{{ selectedMessage.body }}</div>
 
           <div class="compose-actions">
             <button
@@ -614,6 +659,42 @@ function formatDate(value, full = false) {
       : d.toLocaleDateString('en-GB')
 }
 
+const parsedReportBody = computed(() => {
+  if (!selectedMessage.value) return null
+  const msg = selectedMessage.value
+  const type = (msg.messageType ?? '').toLowerCase()
+  if (type !== 'report') return null
+  try {
+    const parsed = JSON.parse(msg.body)
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {}
+  return null
+})
+
+function getUnitIcon(unitName) {
+  const name = (unitName ?? '').toLowerCase()
+  if (name.includes('scavenger')) return '🏃'
+  if (name.includes('raider')) return '⚔️'
+  if (name.includes('rifleman')) return '🎯'
+  if (name.includes('sniper')) return '🔭'
+  if (name.includes('shock')) return '💥'
+  if (name.includes('flame')) return '🔥'
+  if (name.includes('power')) return '⚡'
+  if (name.includes('outpost')) return '🛡️'
+  if (name.includes('bike') || name.includes('assault')) return '🏍️'
+  if (name.includes('buggy') || name.includes('rust')) return '🚗'
+  if (name.includes('war rig')) return '🚛'
+  if (name.includes('interceptor')) return '⚡'
+  if (name.includes('siege')) return '🏰'
+  if (name.includes('wall breaker')) return '💣'
+  if (name.includes('emp')) return '📡'
+  if (name.includes('laser')) return '🔫'
+  if (name.includes('drone')) return '🤖'
+  if (name.includes('rad')) return '☢️'
+  if (name.includes('convoy')) return '🚐'
+  return '⚔️'
+}
+
 onMounted(async () => {
   await loadAllMessages()
   applyRouteRecipient()
@@ -828,6 +909,12 @@ watch(() => route.query, () => {
   background: rgba(255,48,64,.18);
 }
 
+.msg-action-btns {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .msg-unread-btn {
   background: rgba(0,212,255,.06);
   border: 1px solid rgba(0,212,255,.3);
@@ -836,7 +923,6 @@ watch(() => route.query, () => {
   cursor: pointer;
   font-family: var(--ff);
   font-size: 11px;
-  margin-left: 6px;
 }
 
 .msg-unread-btn:hover {
@@ -960,6 +1046,57 @@ watch(() => route.query, () => {
   background: rgba(0,212,255,.02);
   border: 1px solid var(--border);
 }
+
+.report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.report-outcome {
+  font-family: var(--ff-title);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 10px 16px;
+  border: 1px solid;
+  margin-bottom: 6px;
+}
+.outcome--win { color: var(--green); border-color: rgba(48,255,128,.3); background: rgba(48,255,128,.05); }
+.outcome--loss { color: var(--red); border-color: rgba(255,48,64,.3); background: rgba(255,48,64,.05); }
+.report-poi-name { font-size: 13px; color: var(--text); font-weight: 700; margin-bottom: 8px; }
+.report-section-title {
+  font-size: 8px;
+  color: var(--cyan);
+  letter-spacing: 3px;
+  font-family: var(--ff-title);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.report-col { display: flex; flex-direction: column; gap: 4px; }
+.report-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+.report-unit-row--loss { opacity: .75; }
+.report-unit-icon { font-size: 13px; width: 20px; text-align: center; }
+.report-unit-name { flex: 1; color: var(--text); }
+.report-unit-qty { font-family: var(--ff-title); font-weight: 700; color: var(--cyan); }
+.report-qty--red { color: var(--red); }
+.report-qty--orange { color: #ff9040; }
+.report-loot-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(0,212,255,.03);
+  border: 1px solid var(--border);
+}
+.report-loot-item { font-size: 11px; color: var(--green); padding: 3px 0; }
 
 .messages-empty {
   align-items: center;

@@ -320,8 +320,40 @@
           <span class="modal-title">⚔️ FORCES ARRIVED — {{ combatResult.poiLabel ?? combatResult.poiId }}</span>
           <button class="modal-close" @click="combatResult = null">✕</button>
         </div>
-        <div class="modal-body" style="padding:16px; font-size:11px; color:var(--text)">
-          {{ combatResult.units }} have arrived at the target location.
+        <div class="modal-body" style="padding:16px">
+          <div v-if="combatResult.attackerWins !== null"
+               :style="combatResult.attackerWins
+                 ? 'color:var(--green);font-family:var(--ff-title);font-size:13px;font-weight:700;margin-bottom:12px'
+                 : 'color:var(--red);font-family:var(--ff-title);font-size:13px;font-weight:700;margin-bottom:12px'">
+            {{ combatResult.attackerWins ? '✓ VICTORY' : '✗ DEFEATED' }}
+          </div>
+
+          <div style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:8px">YOUR FORCES</div>
+          <div v-for="(qty, name) in combatResult.attackerSurvived" :key="'s'+name"
+               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
+            <span style="color:var(--text)">{{ name }}</span>
+            <span style="color:var(--green);font-family:var(--ff-title)">{{ qty }} survived</span>
+          </div>
+          <div v-for="(qty, name) in combatResult.attackerLosses" :key="'l'+name"
+               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
+            <span style="color:var(--muted)">{{ name }}</span>
+            <span style="color:var(--red);font-family:var(--ff-title)">-{{ qty }} lost</span>
+          </div>
+
+          <div v-if="Object.keys(combatResult.npcLosses).length"
+               style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin:12px 0 8px">
+            NPC CASUALTIES
+          </div>
+          <div v-for="(qty, name) in combatResult.npcLosses" :key="'n'+name"
+               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
+            <span style="color:var(--muted)">{{ name }}</span>
+            <span style="color:var(--orange, #ff9040);font-family:var(--ff-title)">-{{ qty }}</span>
+          </div>
+
+          <div v-if="!combatResult.attackerWins && !combatResult.attackerLosses"
+               style="font-size:11px;color:var(--text)">
+            {{ combatResult.units }} have arrived.
+          </div>
         </div>
         <div class="modal-footer">
           <button class="modal-confirm" @click="combatResult = null">CLOSE</button>
@@ -570,6 +602,16 @@ async function confirmScout() {
         lootIntervalSeconds: 300,
         poiLabel: targetPoi.label ?? targetPoi.id,
       })
+      // Persist local ops to survive tab navigation
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+        stored.push({
+          ...operations.value[operations.value.length - 1],
+          _savedAt: Date.now()
+        })
+        const alive = stored.filter(o => Date.now() - o._savedAt < o.travelDuration)
+        sessionStorage.setItem('localOps', JSON.stringify(alive))
+      } catch {}
       renderMap()
     }
 
@@ -586,6 +628,21 @@ function confirmRaid() { /* replaced — see confirmAttack */ }
 async function loadOperations() {
   if (!props.settlement?.id) return
   try {
+    // Restore local ops from sessionStorage if still traveling
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+      const alive = stored.filter(o => {
+        const elapsed = Date.now() - o._savedAt
+        return elapsed < o.travelDuration
+      })
+      alive.forEach(o => {
+        if (!operations.value.some(existing => existing.id === o.id)) {
+          operations.value.push(o)
+        }
+      })
+      sessionStorage.setItem('localOps', JSON.stringify(alive))
+    } catch {}
+
     const data = await getSettlementOperations(props.settlement.id)
     const newOps = (data || []).map(op => ({
       id: op.id,
@@ -689,11 +746,18 @@ async function loadOperations() {
       if (op.operationType === 'raid_poi' && op.phase === 'arrived'
           && !shownReportIds.has(String(op.id))) {
         markReportShown(op.id)
+        let battleData = null
+        try { battleData = op.resultJson ? JSON.parse(op.resultJson) : null } catch {}
         combatResult.value = {
           poiId: op.poiId,
           poiLabel: op.poiLabel ?? op.poiId,
           units: op.unitSummary ?? 'Unknown forces',
-          status: 'ARRIVED'
+          status: 'ARRIVED',
+          attackerWins: battleData?.attackerWins ?? null,
+          attackerLosses: battleData?.attackerLosses ?? {},
+          attackerSurvived: battleData?.attackerSurvived ?? {},
+          npcLosses: battleData?.npcLosses ?? {},
+          remainingNpcUnits: battleData?.remainingNpcUnits ?? {}
         }
       }
     })
@@ -773,6 +837,16 @@ async function confirmAttack() {
         lootIntervalSeconds: 300,
         poiLabel: targetPoiA?.label ?? null,
       })
+      // Persist local ops to survive tab navigation
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('localOps') ?? '[]')
+        stored.push({
+          ...operations.value[operations.value.length - 1],
+          _savedAt: Date.now()
+        })
+        const alive = stored.filter(o => Date.now() - o._savedAt < o.travelDuration)
+        sessionStorage.setItem('localOps', JSON.stringify(alive))
+      } catch {}
       renderMap()
     }
 

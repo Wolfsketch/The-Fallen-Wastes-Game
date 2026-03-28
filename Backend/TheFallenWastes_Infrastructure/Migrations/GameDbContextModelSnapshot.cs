@@ -318,8 +318,17 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<bool>("IsCleared")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsInitialized")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LootItemsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("NextRespawnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("NpcUnitsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PoiId")
                         .IsRequired()
