@@ -247,6 +247,11 @@ export async function reinforcePoi(settlementId, targetPoiId, units) {
     return response.data
 }
 
+export async function depositToVault(settlementId, amount) {
+    const response = await api.post(`/Settlements/${settlementId}/vault/deposit`, { amount })
+    return response.data
+}
+
 // Reports
 export async function getReportMessages(playerId) {
     const response = await api.get(`/Messages/${playerId}/reports`)

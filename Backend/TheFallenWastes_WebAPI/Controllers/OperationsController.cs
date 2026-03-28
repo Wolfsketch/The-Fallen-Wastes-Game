@@ -124,11 +124,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                 return BadRequest("RaidVault building level 1 required to scout.");
 
             // Validate RareTech
-            if (settlement.Resources.RareTech < request.RareTechAmount)
-                return BadRequest("Not enough RareTech.");
+            if (settlement.VaultRareTech < request.RareTechAmount)
+                return BadRequest("Not enough RareTech in Relic Vault.");
 
-            // Deduct RareTech
-            settlement.Resources.Spend(rareTech: request.RareTechAmount);
+            // Deduct from vault
+            settlement.WithdrawFromVault(request.RareTechAmount);
 
             // Create and immediately resolve operation (no background worker yet)
             var sentUnitsJson = JsonSerializer.Serialize(new Dictionary<string, int>());
@@ -195,17 +195,17 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (defender == null)
                 return NotFound("Target settlement not found.");
 
-            // Validate attacker has enough RareTech
-            if (attacker.Resources.RareTech < request.RareTechAmount)
-                return BadRequest("Not enough RareTech.");
+            // Validate attacker has enough RareTech in vault
+            if (attacker.VaultRareTech < request.RareTechAmount)
+                return BadRequest("Not enough RareTech in Relic Vault.");
 
-            // RaidVault mechanic
-            int defenderStock = Math.Min(defender.Resources.RareTech, defender.RaidVaultCapacity);
+            // RaidVault mechanic: defender's at-risk amount is their vault stock
+            int defenderStock = defender.VaultRareTech;
             bool attackerWins = request.RareTechAmount > defenderStock;
             int stolenAmount = 0;
 
-            // Deduct attacker RareTech regardless
-            attacker.Resources.Spend(rareTech: request.RareTechAmount);
+            // Deduct attacker vault RareTech regardless
+            attacker.WithdrawFromVault(request.RareTechAmount);
 
             var sentUnitsJson = JsonSerializer.Serialize(new Dictionary<string, int>());
             var operation = new Operation(
@@ -227,9 +227,9 @@ namespace TheFallenWastes_WebAPI.Controllers
             {
                 stolenAmount = defenderStock;
 
-                // Steal from defender
+                // Steal from defender vault
                 if (stolenAmount > 0)
-                    defender.Resources.Spend(rareTech: stolenAmount);
+                    defender.WithdrawFromVault(stolenAmount);
 
                 resultJson = JsonSerializer.Serialize(new
                 {

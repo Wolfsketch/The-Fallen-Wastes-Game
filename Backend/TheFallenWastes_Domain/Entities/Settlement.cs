@@ -48,6 +48,9 @@ namespace TheFallenWastes_Domain.Entities
         public int RareTechCapacity => GetStorageCapacity(BuildingType.TechVault);
         public int RaidVaultCapacity => GetStorageCapacity(BuildingType.RaidVault);
 
+        // RareTech stored inside the Relic Vault (separate from the general resource pool)
+        public int VaultRareTech { get; private set; }
+
         private Settlement()
         {
             Name = string.Empty;
@@ -56,6 +59,7 @@ namespace TheFallenWastes_Domain.Entities
             UnitInventory = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             TrainingQueue = new List<UnitTrainingQueueItem>();
             _usedPopulation = 0;
+            VaultRareTech = 0;
         }
 
         public Settlement(string name, Guid playerId)
@@ -89,6 +93,7 @@ namespace TheFallenWastes_Domain.Entities
             TrainingQueue = new List<UnitTrainingQueueItem>();
 
             _usedPopulation = 0;
+            VaultRareTech = 0;
             RecalculateUsedPopulation();
         }
 
@@ -367,6 +372,38 @@ namespace TheFallenWastes_Domain.Entities
         }
 
         /// <summary>
+        /// Moves RareTech from the general resource pool into the Relic Vault.
+        /// </summary>
+        public (int deposited, string? error) DepositToVault(int amount)
+        {
+            if (amount <= 0) return (0, "Amount must be positive.");
+            if (Resources.RareTech < amount)
+                return (0, "Not enough RareTech in your resource pool.");
+
+            int capacity = RaidVaultCapacity;
+            int space = capacity == int.MaxValue
+                ? int.MaxValue
+                : Math.Max(0, capacity - VaultRareTech);
+
+            if (space <= 0) return (0, "Vault is full.");
+
+            int actual = Math.Min(amount, space == int.MaxValue ? amount : space);
+            Resources.Spend(0, 0, 0, 0, 0, actual);
+            VaultRareTech += actual;
+            return (actual, null);
+        }
+
+        /// <summary>
+        /// Moves RareTech from the Relic Vault back into the general resource pool.
+        /// </summary>
+        public void WithdrawFromVault(int amount)
+        {
+            int actual = Math.Min(amount, VaultRareTech);
+            VaultRareTech -= actual;
+            Resources.Add(0, 0, 0, 0, 0, actual);
+        }
+
+        /// <summary>
         /// Returns how much RareTech was stolen.
         /// Attacker wins if attackerRareTech > defenderRaidVaultStock.
         /// Defender loses all their RaidVault stock.
@@ -374,15 +411,13 @@ namespace TheFallenWastes_Domain.Entities
         /// </summary>
         public int TryScoutRaidVault(int attackerRareTech, out bool defenderNotified)
         {
-            int defenderStock = Resources.RareTech;
-
-            // Only the RaidVault stock is at risk — cap it at RaidVaultCapacity
-            int atRisk = Math.Min(defenderStock, RaidVaultCapacity);
+            // Vault stock IS the at-risk amount — general pool is not touched
+            int atRisk = VaultRareTech;
 
             if (attackerRareTech > atRisk)
             {
-                // Attacker wins: steal all at-risk RT from defender
-                Resources.Spend(0, 0, 0, 0, 0, atRisk);
+                // Attacker wins: steal all vault RT from defender
+                VaultRareTech -= atRisk;
                 defenderNotified = true;
                 return atRisk;
             }

@@ -102,6 +102,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                 settlement.AvailablePopulation,
                 settlement.Morale,
                 settlement.UnitInventory,
+                settlement.VaultRareTech,
+                RaidVaultCapacity = settlement.RaidVaultCapacity,
+                RaidVaultLevel = settlement.GetBuildingLevel(BuildingType.RaidVault),
 
                 Resources = new
                 {
@@ -177,6 +180,34 @@ namespace TheFallenWastes_WebAPI.Controllers
                     .OrderBy(b => BuildingDefinitions.GetCategory(b.Type))
                     .ThenBy(b => b.Type)
                     .Select(b => MapBuilding(b, currentLevels, buildQueueFull))
+            });
+        }
+
+        [HttpPost("{id}/vault/deposit")]
+        public async Task<IActionResult> DepositToVault(Guid id, [FromBody] DepositRequest request)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null) return NotFound("Settlement not found.");
+
+            int raidVaultLevel = settlement.GetBuildingLevel(BuildingType.RaidVault);
+            if (raidVaultLevel < 1)
+                return BadRequest("Build a Relic Vault first.");
+
+            var (deposited, error) = settlement.DepositToVault(request.Amount);
+            if (error != null) return BadRequest(error);
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Deposited = deposited,
+                VaultRareTech = settlement.VaultRareTech,
+                VaultCapacity = settlement.RaidVaultCapacity,
+                RemainingRareTech = settlement.Resources.RareTech,
+                Message = $"{deposited} RT deposited into Relic Vault."
             });
         }
 
@@ -1274,5 +1305,10 @@ namespace TheFallenWastes_WebAPI.Controllers
     {
         public string UnitName { get; set; } = string.Empty;
         public int Quantity { get; set; } = 1;
+    }
+
+    public class DepositRequest
+    {
+        public int Amount { get; set; }
     }
 }

@@ -160,7 +160,8 @@
               <button class="qty-btn" @click="relicDepositAmount = Math.max(0, relicDepositAmount - 10)">−</button>
               <input class="relic-input" type="number" min="0"
                      :max="maxRelicDeposit"
-                     v-model.number="relicDepositAmount" />
+                     v-model.number="relicDepositAmount"
+                     @input="relicDepositAmount = Math.max(0, Math.min(maxRelicDeposit, relicDepositAmount))" />
               <button class="qty-btn" @click="relicDepositAmount = Math.min(maxRelicDeposit, relicDepositAmount + 10)">+</button>
               <button class="relic-btn"
                       :disabled="relicDepositAmount <= 0 || depositing"
@@ -233,7 +234,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { getSettlement } from '../services/api'
+import { getSettlement, depositToVault } from '../services/api'
 
 const props = defineProps({
   settlement: {
@@ -516,14 +517,16 @@ const relicVaultCapacity = computed(() =>
   relicVaultLevel.value >= 10 ? Infinity : relicVaultLevel.value * 100
 )
 const relicStored = computed(() =>
-  props.liveResources?.rareTech ?? props.settlement?.rareTech ?? 0
+  props.settlement?.vaultRareTech ?? 0
 )
 const availableRareTech = computed(() =>
   props.liveResources?.rareTech ?? props.settlement?.rareTech ?? 0
 )
 const maxRelicDeposit = computed(() => {
-  if (relicVaultLevel.value >= 10) return availableRareTech.value
-  return Math.min(availableRareTech.value, relicVaultCapacity.value - relicStored.value)
+  const available = availableRareTech.value
+  if (relicVaultLevel.value >= 10) return available
+  const space = Math.max(0, relicVaultCapacity.value - relicStored.value)
+  return Math.min(available, space)
 })
 
 const relicDepositAmount = ref(0)
@@ -537,14 +540,13 @@ async function depositToRelicVault() {
   relicDepositError.value = ''
   relicDepositSuccess.value = ''
   try {
-    // No actual API call needed: RareTech is already in settlement resources.
-    // The RaidVault level determines how much is protected during a scout.
-    await new Promise(r => setTimeout(r, 400))
-    relicDepositSuccess.value =
-      `${relicDepositAmount.value} RT is now protected by the vault (up to vault capacity).`
+    const result = await depositToVault(props.settlement.id, relicDepositAmount.value)
+    relicDepositSuccess.value = result.message ?? `${relicDepositAmount.value} RT deposited.`
     relicDepositAmount.value = 0
+    if (props.refreshSettlement) await props.refreshSettlement()
   } catch (e) {
-    relicDepositError.value = 'Deposit failed.'
+    const msg = e?.response?.data
+    relicDepositError.value = typeof msg === 'string' ? msg : 'Deposit failed.'
   } finally {
     depositing.value = false
   }
@@ -1023,6 +1025,9 @@ async function depositToRelicVault() {
   color: var(--text); padding: 6px 10px; font-family: var(--ff-title), sans-serif;
   font-size: 12px; text-align: center;
 }
+.relic-input::-webkit-inner-spin-button,
+.relic-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.relic-input[type=number] { -moz-appearance: textfield; }
 .relic-btn {
   padding: 8px 16px; background: linear-gradient(180deg, var(--cyan-dark), var(--cyan-dim));
   border: 1px solid var(--cyan); color: #fff; font-family: var(--ff-title), sans-serif;

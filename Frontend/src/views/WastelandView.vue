@@ -170,6 +170,13 @@
             <template v-if="scoutModal.type === 'poi'">
               <div class="modal-info">Scout to reveal NPC tier, loot quality and active operators. Fixed cost: <strong>{{ poiScoutCost(selPoi) }} RT</strong></div>
               <div class="modal-fixed-cost"><span class="modal-label">SCOUT COST</span><span class="modal-value">{{ poiScoutCost(selPoi) }} RareTech</span></div>
+              <div class="modal-vault-info">
+                <span class="modal-label">YOUR VAULT BALANCE</span>
+                <span class="modal-value" :class="vaultRareTech >= scoutModal.amount ? 'vault-ok' : 'vault-low'">
+                  {{ vaultRareTech }} RT
+                  {{ raidVaultLevel < 1 ? '— No Relic Vault built' : '' }}
+                </span>
+              </div>
             </template>
             <template v-else>
               <div class="modal-info">Send more RT than enemy Vault to succeed. Both sides lose RT. Min: <strong>100 RT</strong>.</div>
@@ -182,10 +189,17 @@
                 </div>
                 <div class="modal-hint">Available: {{ currentRareTech }} RT</div>
               </div>
+              <div class="modal-vault-info">
+                <span class="modal-label">YOUR VAULT BALANCE</span>
+                <span class="modal-value" :class="vaultRareTech >= scoutModal.amount ? 'vault-ok' : 'vault-low'">
+                  {{ vaultRareTech }} RT
+                  {{ raidVaultLevel < 1 ? '— No Relic Vault built' : '' }}
+                </span>
+              </div>
             </template>
             <div v-if="scoutError" class="modal-error-msg">{{ scoutError }}</div>
           </div>
-          <div class="modal-footer"><button class="modal-cancel" @click="scoutModal.open = false">CANCEL</button><button class="modal-confirm" @click="confirmScout">SEND SCOUT</button></div>
+          <div class="modal-footer"><button class="modal-cancel" @click="scoutModal.open = false">CANCEL</button><button class="modal-confirm" @click="confirmScout" :disabled="vaultRareTech < scoutModal.amount || raidVaultLevel < 1" :title="raidVaultLevel < 1 ? 'Build a Relic Vault first' : vaultRareTech < scoutModal.amount ? 'Not enough RT in your Relic Vault' : ''">SEND SCOUT</button></div>
         </div>
       </div>
     </transition>
@@ -340,6 +354,8 @@ const selectedPoiHasNonOwnArrival = computed(() => {
 const currentRareTech = computed(() =>
     props.settlement?.rareTech ?? props.settlement?.resources?.rareTech ?? 0
 )
+const vaultRareTech = computed(() => props.settlement?.vaultRareTech ?? 0)
+const raidVaultLevel = computed(() => props.settlement?.raidVaultLevel ?? 0)
 
 function poiScoutCost(poi) {
   if (!poi) return 5
@@ -943,6 +959,10 @@ onUnmounted(() => {
 .modal-unit-avail{font-size:9px;color:var(--muted);font-family:var(--ff-title);letter-spacing:.8px;min-width:52px;text-align:right}
 .modal-input--sm{width:58px}
 .modal-error-msg{padding:8px 10px;border:1px solid rgba(255,60,60,.3);background:rgba(255,60,60,.06);color:#ff7060;font-size:10px}
+.modal-vault-info{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(0,212,255,.03);border-top:1px solid var(--border)}
+.vault-ok{color:var(--green);font-family:var(--ff-title);font-weight:700}
+.vault-low{color:var(--red);font-family:var(--ff-title);font-weight:700}
+.modal-confirm:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
 .ps-enter-active,.ps-leave-active{transition:transform .2s,opacity .2s}
 .ps-enter-from,.ps-leave-to{transform:translateY(100%);opacity:0}
 .modal-fade-enter-active,.modal-fade-leave-active{transition:opacity .18s}

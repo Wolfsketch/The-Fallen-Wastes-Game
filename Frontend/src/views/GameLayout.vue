@@ -370,6 +370,9 @@ async function loadSettlementData() {
       fuel: data.resources?.fuel ?? 0,
       energy: data.resources?.energy ?? 0,
       rareTech: data.resources?.rareTech ?? 0,
+      vaultRareTech: data.vaultRareTech ?? settlement.value?.vaultRareTech ?? 0,
+      raidVaultCapacity: data.raidVaultCapacity ?? settlement.value?.raidVaultCapacity ?? 0,
+      raidVaultLevel: data.raidVaultLevel ?? settlement.value?.raidVaultLevel ?? 0,
       unitInventory: data.unitInventory ?? data.UnitInventory ?? settlement.value?.unitInventory ?? {}
     }
   } catch (err) {
@@ -414,6 +417,9 @@ function setPlayerData(data) {
       fuel: s.fuel ?? s.resources?.fuel ?? 0,
       energy: s.energy ?? s.resources?.energy ?? 0,
       rareTech: s.rareTech ?? s.resources?.rareTech ?? 0,
+      vaultRareTech: data.vaultRareTech ?? s?.vaultRareTech ?? 0,
+      raidVaultCapacity: data.raidVaultCapacity ?? s?.raidVaultCapacity ?? 0,
+      raidVaultLevel: data.raidVaultLevel ?? s?.raidVaultLevel ?? 0,
       unitInventory: s.unitInventory ?? s.UnitInventory ?? {}
     }
   }

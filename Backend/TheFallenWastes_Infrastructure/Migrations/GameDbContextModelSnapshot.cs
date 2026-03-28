@@ -500,6 +500,9 @@ namespace TheFallenWastes_Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("UnitInventory");
 
+                    b.Property<int>("VaultRareTech")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PlayerId");
