@@ -20,6 +20,9 @@ namespace TheFallenWastes_Domain.Entities
         public bool IsCompleted { get; private set; }
         public DateTime? CompletedAtUtc { get; private set; }
 
+        /// <summary>How many units from this batch have already been delivered to the settlement inventory.</summary>
+        public int DeliveredQuantity { get; private set; }
+
         private UnitTrainingQueueItem() { }
 
         public UnitTrainingQueueItem(
@@ -60,11 +63,24 @@ namespace TheFallenWastes_Domain.Entities
 
         public int GetRemainingSeconds()
         {
-            if (IsCompleted)
+            if (IsCompleted || DeliveredQuantity >= Quantity)
                 return 0;
 
-            var remaining = (int)Math.Ceiling((EndsAtUtc - DateTime.UtcNow).TotalSeconds);
-            return Math.Max(0, remaining);
+            // Time until the NEXT individual unit is ready
+            double totalSeconds = (EndsAtUtc - StartedAtUtc).TotalSeconds;
+            int perUnit = Math.Max(1, (int)Math.Round(totalSeconds / Quantity));
+            int nextDeliveryAt = perUnit * (DeliveredQuantity + 1);
+            var remaining = StartedAtUtc.AddSeconds(nextDeliveryAt) - DateTime.UtcNow;
+            return remaining.TotalSeconds > 0 ? (int)Math.Ceiling(remaining.TotalSeconds) : 0;
+        }
+
+        /// <summary>Seconds until the entire batch is complete.</summary>
+        public int GetTotalRemainingSeconds()
+        {
+            if (IsCompleted)
+                return 0;
+            var remaining = (EndsAtUtc - DateTime.UtcNow).TotalSeconds;
+            return remaining > 0 ? (int)Math.Ceiling(remaining) : 0;
         }
 
         public bool IsReadyToComplete()
@@ -77,11 +93,19 @@ namespace TheFallenWastes_Domain.Entities
             return Quantity * PopulationCostPerUnit;
         }
 
+        /// <summary>Deliver a number of units from this batch (partial completion).</summary>
+        public void DeliverUnits(int count)
+        {
+            if (count <= 0) return;
+            DeliveredQuantity = Math.Min(Quantity, DeliveredQuantity + count);
+        }
+
         public void MarkCompleted()
         {
             if (IsCompleted)
                 return;
 
+            DeliveredQuantity = Quantity;
             IsCompleted = true;
             CompletedAtUtc = DateTime.UtcNow;
         }

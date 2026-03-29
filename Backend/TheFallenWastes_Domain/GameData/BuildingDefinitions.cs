@@ -470,34 +470,34 @@ namespace TheFallenWastes_Domain.GameData
         {
             return type switch
             {
-                BuildingType.HeadQuarter => "Het centrale bouwcommando. Hogere levels verlagen de bouwtijd van alle gebouwen.",
-                BuildingType.Shelter => "Vergroot de totale population-cap van de settlement en bepaalt hoeveel inwoners beschikbaar zijn.",
-                BuildingType.CouncilHall => "Burgerlijk bestuurscentrum voor expansion, convoy-gerelateerde systemen en latere settlement governance.",
+                BuildingType.HeadQuarter => "Central command hub. Higher levels reduce construction time for all buildings.",
+                BuildingType.Shelter => "Increases the total population cap of the settlement and determines how many residents are available.",
+                BuildingType.CouncilHall => "Civic administration center for expansion, convoy-related systems and future settlement governance.",
 
-                BuildingType.FarmDome => "Produceert Food per uur voor de settlement.",
-                BuildingType.FuelRefinery => "Produceert Fuel per uur voor voertuigen, productie en logistiek.",
-                BuildingType.ScrapForge => "Produceert Scrap per uur uit herwonnen metaal en puin.",
-                BuildingType.WaterPurifier => "Produceert Water per uur via filtratie en zuivering.",
-                BuildingType.SolarArray => "Produceert Energy per uur uit zonnevelden en batterijnetten.",
+                BuildingType.FarmDome => "Produces Food per hour for the settlement.",
+                BuildingType.FuelRefinery => "Produces Fuel per hour for vehicles, production and logistics.",
+                BuildingType.ScrapForge => "Produces Scrap per hour from reclaimed metal and debris.",
+                BuildingType.WaterPurifier => "Produces Water per hour via filtration and purification.",
+                BuildingType.SolarArray => "Produces Energy per hour from solar fields and battery grids.",
 
-                BuildingType.FoodSilo => "Vergroot de opslagcapaciteit voor Food en levert settlement power.",
-                BuildingType.FuelDepot => "Vergroot de opslagcapaciteit voor Fuel en levert settlement power.",
-                BuildingType.PowerBank => "Vergroot de opslagcapaciteit voor Energy en levert settlement power.",
-                BuildingType.ScrapVault => "Vergroot de opslagcapaciteit voor Scrap en levert settlement power.",
-                BuildingType.WaterTank => "Vergroot de opslagcapaciteit voor Water en levert settlement power.",
-                BuildingType.TechVault => "Vergroot de opslagcapaciteit voor RareTech en levert extra settlement power.",
-                BuildingType.RaidVault => "Beveiligd archief voor RareTech reserves. Grotere stockage vertraagt scout-plunderingen. Vanaf level 10 onbeperkte opslag.",
+                BuildingType.FoodSilo => "Increases storage capacity for Food and provides settlement power.",
+                BuildingType.FuelDepot => "Increases storage capacity for Fuel and provides settlement power.",
+                BuildingType.PowerBank => "Increases storage capacity for Energy and provides settlement power.",
+                BuildingType.ScrapVault => "Increases storage capacity for Scrap and provides settlement power.",
+                BuildingType.WaterTank => "Increases storage capacity for Water and provides settlement power.",
+                BuildingType.TechVault => "Increases storage capacity for RareTech and provides extra settlement power.",
+                BuildingType.RaidVault => "Secured archive for RareTech reserves. Larger stock slows scout raids. Unlimited storage from level 10.",
 
-                BuildingType.Barracks => "Ontgrendelt en versnelt infantry training.",
-                BuildingType.Garage => "Ontgrendelt en versnelt vehicle training.",
-                BuildingType.Workshop => "Ontgrendelt en versnelt advanced/support unit training.",
-                BuildingType.CommandCenter => "Ontgrendelt command units en speciale operationele units zoals Convoy.",
+                BuildingType.Barracks => "Unlocks and accelerates infantry training.",
+                BuildingType.Garage => "Unlocks and accelerates vehicle training.",
+                BuildingType.Workshop => "Unlocks and accelerates advanced and support unit training.",
+                BuildingType.CommandCenter => "Unlocks command units and special operational units such as Convoy.",
 
-                BuildingType.PerimeterWall => "Versterkt de defensieve positie van de settlement. Net als in old-school Grepolis kan dit ook een aanwezige Convoy moeilijker maken om eruit te slaan.",
-                BuildingType.WatchTower => "Toekomstige feature. Nog niet actief of bouwbaar.",
+                BuildingType.PerimeterWall => "Strengthens the defensive position of the settlement. Makes it harder for enemy Convoys to break through.",
+                BuildingType.WatchTower => "Future feature. Not yet active or buildable.",
 
-                BuildingType.TechLab => "Ontgrendelt research en verhoogt researchesnelheid.",
-                BuildingType.TechSalvager => "Verwerkt event- en POI-items tot RareTech, onderdelen en researchcomponenten.",
+                BuildingType.TechLab => "Unlocks research and increases research speed.",
+                BuildingType.TechSalvager => "Processes event and POI items into RareTech, components and research materials.",
 
                 _ => "Unknown building"
             };

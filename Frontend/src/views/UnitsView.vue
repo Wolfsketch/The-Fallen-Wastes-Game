@@ -100,13 +100,24 @@
 
           <div class="queue-item-info">
             <div class="queue-item-name">{{ item?.unitName || 'Unknown Unit' }}</div>
-            <div class="queue-item-meta">×{{ item?.quantity ?? 0 }}</div>
+            <div class="queue-item-meta">
+              <span>×{{ item?.quantity ?? 0 }}</span>
+              <span v-if="item.isActive && (item.deliveredQuantity ?? 0) > 0" class="queue-delivered">
+                &mdash; {{ item.deliveredQuantity }}/{{ item.quantity }} trained
+              </span>
+            </div>
           </div>
 
                   <div class="queue-item-timer">
-                    <!-- Active training shows countdown and progress. Waiting items show a WAITING label and empty bar. -->
-                    <div v-if="item.isActive" class="queue-item-time">{{ formatQueueTime(getQueueRemaining(item)) }}</div>
+                    <!-- Active: countdown to next unit; waiting items show WAITING -->
+                    <div v-if="item.isActive" class="queue-item-time">{{ formatQueueTime(getNextUnitRemaining(item)) }}</div>
                     <div v-else class="queue-item-waiting">WAITING</div>
+
+                    <!-- Batch ETA when more than 1 unit remains -->
+                    <div
+                        v-if="item.isActive && (item.quantity - (item.deliveredQuantity ?? 0)) > 1"
+                        class="queue-batch-eta"
+                    >batch: {{ formatQueueTime(item.totalRemainingSeconds ?? 0) }}</div>
 
                     <div class="queue-item-bar">
                       <div v-if="item.isActive" class="queue-item-bar-fill" :style="{ width: getQueuePct(item) + '%' }" />
@@ -619,9 +630,12 @@ function normalizeTrainingQueue(raw) {
           id: item?.id ?? item?.Id ?? idx,
           unitName: item?.unitName ?? item?.UnitName ?? 'Unknown Unit',
           quantity: item?.quantity ?? item?.Quantity ?? 0,
+          deliveredQuantity: item?.deliveredQuantity ?? item?.DeliveredQuantity ?? 0,
+          perUnitDurationSeconds: item?.perUnitDurationSeconds ?? item?.PerUnitDurationSeconds ?? 0,
           startedAtUtc: item?.startedAtUtc ?? item?.StartedAtUtc ?? null,
-          completesAtUtc: item?.completesAtUtc ?? item?.CompletesAtUtc ?? null,
+          completesAtUtc: item?.endsAtUtc ?? item?.EndsAtUtc ?? item?.completesAtUtc ?? item?.CompletesAtUtc ?? null,
           remainingSeconds: item?.remainingSeconds ?? item?.RemainingSeconds ?? 0,
+          totalRemainingSeconds: item?.totalRemainingSeconds ?? item?.TotalRemainingSeconds ?? item?.remainingSeconds ?? item?.RemainingSeconds ?? 0,
           totalDurationSeconds: item?.totalDurationSeconds ?? item?.TotalDurationSeconds ?? 0,
           queueOrder: item?.queueOrder ?? item?.QueueOrder ?? idx
         }
@@ -915,30 +929,20 @@ function getQueueUnitImage(unitName) {
 }
 
 function getQueuePct(item) {
+  if (!item.isActive) return 0
+  const perUnit = item.perUnitDurationSeconds || 0
+  if (perUnit > 0) {
+    const nextRemaining = getNextUnitRemaining(item)
+    return Math.min(100, Math.max(0, ((perUnit - nextRemaining) / perUnit) * 100))
+  }
+  // fallback: batch progress
   const remaining = getQueueRemaining(item) || 0
+  const total = item.totalDurationSeconds || item.buildTimeSeconds || 1
+  return Math.min(100, Math.max(0, ((total - remaining) / Math.max(1, total)) * 100))
+}
 
-  // If we have a totalDurationSeconds or buildTimeSeconds use it when available
-  if (item.totalDurationSeconds || item.buildTimeSeconds) {
-    const total = item.totalDurationSeconds || item.buildTimeSeconds || 1
-    return Math.min(100, Math.max(0, ((total - remaining) / Math.max(1, total)) * 100))
-  }
-
-  // If startedAtUtc is present, reconstruct total using startedAt + remaining
-  if (item.startedAtUtc) {
-    const completesAt = now.value + (remaining * 1000)
-    const startedStr = item.startedAtUtc.endsWith('Z') ? item.startedAtUtc : `${item.startedAtUtc}Z`
-    const startedAt = new Date(startedStr).getTime()
-    const total = Math.max(1, Math.ceil((completesAt - startedAt) / 1000))
-    return Math.min(100, Math.max(0, ((total - remaining) / total) * 100))
-  }
-
-  // Fallback: remember the initial remaining as the total for this item key so we can show progress
-  const itemKey = `${item.unitName}_${item.id}`
-  if (!queueTotals.value[itemKey]) {
-    queueTotals.value[itemKey] = remaining || 1
-  }
-  const total = queueTotals.value[itemKey] || 1
-  return Math.min(100, Math.max(0, ((total - remaining) / total) * 100))
+function getNextUnitRemaining(item) {
+  return item?.remainingSeconds ?? 0
 }
 
 function formatQueueTime(sec) {
@@ -1346,6 +1350,25 @@ async function fetchTrainingQueue() {
   color: var(--muted);
   font-family: var(--ff-title);
   letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.queue-delivered {
+  color: #3dff9c;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.queue-batch-eta {
+  font-size: 8px;
+  color: var(--muted);
+  font-family: var(--ff-title);
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  text-align: right;
 }
 
 .queue-item-timer {

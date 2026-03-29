@@ -14,6 +14,9 @@ namespace TheFallenWastes_Domain.Entities
         public string? NpcUnitsJson { get; private set; }
         public string? LootItemsJson { get; private set; }
         public bool IsInitialized { get; private set; }
+        public int GenerationSeed { get; private set; }
+        public bool IsRelocating { get; private set; }
+        public DateTime? RelocatingAtUtc { get; private set; }
 
         private PoiState() { }
 
@@ -50,7 +53,24 @@ namespace TheFallenWastes_Domain.Entities
             ClearedAtUtc = null;
             NextRespawnUtc = DateTime.UtcNow.AddHours(12);
         }
+        public void TriggerRelocation()
+        {
+            GenerationSeed += 1;
+            IsCleared = false;
+            IsInitialized = false;
+            NpcUnitsJson = null;
+            LootItemsJson = null;
+            ClearedAtUtc = null;
+            IsRelocating = true;
+            RelocatingAtUtc = DateTime.UtcNow;
+            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+        }
 
+        public void CompleteRelocation()
+        {
+            IsRelocating = false;
+            RelocatingAtUtc = null;
+        }
         public void ApplyNpcLosses(Dictionary<string, int> losses)
         {
             if (string.IsNullOrEmpty(NpcUnitsJson)) return;

@@ -502,10 +502,16 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<DateTime?>("ClearedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("GenerationSeed")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsCleared")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsInitialized")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRelocating")
                         .HasColumnType("bit");
 
                     b.Property<string>("LootItemsJson")
@@ -520,6 +526,9 @@ namespace TheFallenWastes_Infrastructure.Migrations
                     b.Property<string>("PoiId")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RelocatingAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -799,6 +808,9 @@ namespace TheFallenWastes_Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("DeliveredQuantity")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("EndsAtUtc")
                         .HasColumnType("datetime2");

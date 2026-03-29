@@ -112,6 +112,15 @@
         <div v-if="upgradeError" class="modal-error">{{ upgradeError }}</div>
 
         <button
+            v-if="building.isConstructing && liveRemaining <= 300"
+            class="modal-btn modal-btn--free"
+            :disabled="instantFinishing"
+            @click="doInstantFinish"
+        >
+          {{ instantFinishing ? 'COMPLETING...' : '⚡ FREE — COMPLETE NOW (' + formatTime(liveRemaining) + ')' }}
+        </button>
+
+        <button
             class="modal-btn"
             :class="{ 'modal-btn--disabled': !canUpgradeNow || upgrading }"
             :disabled="!canUpgradeNow || upgrading"
@@ -129,8 +138,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { upgradeBuilding } from '../services/api.js'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { upgradeBuilding, instantFinishBuilding } from '../services/api.js'
 
 const props = defineProps({
   building: { type: Object, required: true },
@@ -146,6 +155,24 @@ const emit = defineEmits(['close', 'upgrade'])
 
 const upgrading = ref(false)
 const upgradeError = ref('')
+const instantFinishing = ref(false)
+
+const now = ref(Date.now())
+let nowTimer = null
+
+onMounted(() => { nowTimer = setInterval(() => { now.value = Date.now() }, 1000) })
+onUnmounted(() => { if (nowTimer) clearInterval(nowTimer) })
+
+const liveRemaining = computed(() => {
+  if (!props.building.isConstructing) return 0
+  if (props.building.constructionEndUtc) {
+    const endStr = props.building.constructionEndUtc.endsWith('Z')
+      ? props.building.constructionEndUtc
+      : `${props.building.constructionEndUtc}Z`
+    return Math.max(0, Math.ceil((new Date(endStr).getTime() - now.value) / 1000))
+  }
+  return props.building.remainingSeconds || 0
+})
 
 const ICONS = {
   HeadQuarter: '🏛️',
@@ -282,6 +309,20 @@ function formatTime(seconds) {
   const s = seconds % 60
   if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`
   return `${m}m ${s.toString().padStart(2, '0')}s`
+}
+
+async function doInstantFinish() {
+  if (!props.settlement?.id) return
+  instantFinishing.value = true
+  upgradeError.value = ''
+  try {
+    await instantFinishBuilding(props.settlement.id)
+    emit('upgrade', props.building.type)
+  } catch (err) {
+    upgradeError.value = err?.response?.data || 'Instant finish failed.'
+  } finally {
+    instantFinishing.value = false
+  }
 }
 
 async function doUpgrade() {
@@ -566,5 +607,16 @@ async function doUpgrade() {
   color: var(--muted);
   box-shadow: none;
   cursor: not-allowed;
+}
+.modal-btn--free {
+  background: linear-gradient(180deg, rgba(61,255,156,.18), rgba(61,255,156,.08));
+  border-color: #3dff9c;
+  color: #3dff9c;
+  box-shadow: 0 0 16px rgba(61,255,156,.18);
+  margin-bottom: 8px;
+}
+.modal-btn--free:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(61,255,156,.28), rgba(61,255,156,.14));
+  box-shadow: 0 0 24px rgba(61,255,156,.3);
 }
 </style>

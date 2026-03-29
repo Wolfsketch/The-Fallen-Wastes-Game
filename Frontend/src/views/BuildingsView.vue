@@ -62,6 +62,15 @@
           </div>
 
           <button
+              v-if="q.isActive && getQueueRemaining(q) <= 300"
+              class="queue-item-free"
+              @click.prevent="doInstantFinish(q)"
+              title="Complete now for free!"
+          >
+            FREE
+          </button>
+
+          <button
               class="queue-item-cancel"
               @click.prevent="openCancelConfirm(q)"
               title="Cancel"
@@ -249,6 +258,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   getBuildings,
   cancelBuilding,
+  instantFinishBuilding,
   getBuildQueue,
   activateCommanderApi
 } from '../services/api.js'
@@ -698,6 +708,19 @@ async function cancelQueueItem(arg) {
   }
 }
 
+async function doInstantFinish() {
+  if (!props.settlement?.id) return
+
+  try {
+    await instantFinishBuilding(props.settlement.id)
+    await fetchBuildings()
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (err) {
+    const msg = err?.response?.data
+    error.value = typeof msg === 'string' ? msg : (msg?.message ?? 'Instant finish failed.')
+  }
+}
+
 async function activateCommander() {
   if (!props.settlement?.id) return
 
@@ -882,6 +905,21 @@ onUnmounted(() => {
   transition: all .15s;
 }
 .queue-item-cancel:hover { border-color: #ff4030; color: #ff4030; background: rgba(255,64,48,.06) }
+
+.queue-item-free {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid #3dff9c;
+  background: rgba(61,255,156,.12);
+  color: #3dff9c;
+  font-family: var(--ff-title);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: all .15s;
+  font-weight: 700;
+}
+.queue-item-free:hover { background: rgba(61,255,156,.25); box-shadow: 0 0 8px rgba(61,255,156,.3) }
 
 .queue-empty { padding: 14px; text-align: center }
 .queue-empty-text { font-size: 10px; color: var(--muted); font-family: var(--ff-title); letter-spacing: 1px }

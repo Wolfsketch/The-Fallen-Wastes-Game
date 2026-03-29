@@ -44,6 +44,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                 s.IsCleared,
                 s.ClearedAtUtc,
                 s.NextRespawnUtc,
+                s.GenerationSeed,
+                s.IsRelocating,
+                RelocatingAtUtc = s.RelocatingAtUtc.HasValue
+                    ? DateTime.SpecifyKind(s.RelocatingAtUtc.Value, DateTimeKind.Utc)
+                    : (DateTime?)null,
                 RespawnInSeconds = s.IsCleared
                     ? (int)Math.Max(0, (s.NextRespawnUtc - now).TotalSeconds)
                     : 0,
@@ -288,6 +293,181 @@ namespace TheFallenWastes_WebAPI.Controllers
                         }
                     }
 
+                    // ── Settlement attack battle resolution ──────────────────
+                    if (op.OperationType == "attack_settlement" && op.ResultJson == null && op.TargetSettlementId.HasValue)
+                    {
+                        var atkSett = await _db.Settlements
+                            .Include(s => s.Buildings)
+                            .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+                        var defSett = await _db.Settlements
+                            .Include(s => s.Buildings)
+                            .FirstOrDefaultAsync(s => s.Id == op.TargetSettlementId.Value);
+
+                        if (atkSett != null && defSett != null)
+                        {
+                            var unitDefs = TheFallenWastes_Domain.UnitFactory.UnitFactory.CreateStarterUnits()
+                                .ToDictionary(u => u.Name, u => u, StringComparer.OrdinalIgnoreCase);
+
+                            var sentUnitsAtk = string.IsNullOrEmpty(op.SentUnitsJson)
+                                ? new Dictionary<string, int>()
+                                : JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson)
+                                  ?? new Dictionary<string, int>();
+
+                            var defUnits = new Dictionary<string, int>(
+                                defSett.UnitInventory, StringComparer.OrdinalIgnoreCase);
+
+                            int atkPower = sentUnitsAtk.Sum(kvp =>
+                                (unitDefs.TryGetValue(kvp.Key, out var ua) ? ua.AttackPower : 10) * kvp.Value);
+                            int defPower = defUnits.Sum(kvp =>
+                                (unitDefs.TryGetValue(kvp.Key, out var ud) ? ud.DefenseVsBallistic : 5) * kvp.Value);
+
+                            bool atkWins = atkPower > defPower;
+
+                            var atkLosses = new Dictionary<string, int>();
+                            var defLosses = new Dictionary<string, int>();
+
+                            if (atkWins)
+                            {
+                                // All defenders eliminated; attacker takes proportional losses
+                                defLosses = defUnits.ToDictionary(k => k.Key, k => k.Value);
+                                double lossRatio = defPower > 0
+                                    ? Math.Min(0.85, (double)defPower / atkPower) : 0.0;
+                                foreach (var kvp in sentUnitsAtk)
+                                {
+                                    int lost = (int)Math.Ceiling(kvp.Value * lossRatio);
+                                    if (lost > 0) atkLosses[kvp.Key] = Math.Min(lost, kvp.Value);
+                                }
+                            }
+                            else
+                            {
+                                // All attackers die on failed assault; defenders take some damage
+                                atkLosses = sentUnitsAtk.ToDictionary(k => k.Key, k => k.Value);
+                                double defLossRatio = atkPower > 0
+                                    ? Math.Min(0.50, (double)atkPower / defPower) : 0.0;
+                                foreach (var kvp in defUnits)
+                                {
+                                    int lost = (int)Math.Floor(kvp.Value * defLossRatio);
+                                    if (lost > 0) defLosses[kvp.Key] = lost;
+                                }
+                            }
+
+                            // Apply defender unit losses
+                            foreach (var kvp in defLosses)
+                            {
+                                if (defSett.UnitInventory.TryGetValue(kvp.Key, out int cur))
+                                {
+                                    int remaining = cur - kvp.Value;
+                                    if (remaining <= 0) defSett.UnitInventory.Remove(kvp.Key);
+                                    else defSett.UnitInventory[kvp.Key] = remaining;
+                                }
+                            }
+                            _db.Entry(defSett).Property(s => s.UnitInventory).IsModified = true;
+
+                            var atkSurvived = sentUnitsAtk
+                                .ToDictionary(k => k.Key,
+                                    k => k.Value - (atkLosses.TryGetValue(k.Key, out var al) ? al : 0))
+                                .Where(k => k.Value > 0)
+                                .ToDictionary(k => k.Key, k => k.Value);
+
+                            var defSurvived = defUnits
+                                .ToDictionary(k => k.Key,
+                                    k => k.Value - (defLosses.TryGetValue(k.Key, out var dl) ? dl : 0))
+                                .Where(k => k.Value > 0)
+                                .ToDictionary(k => k.Key, k => k.Value);
+
+                            // Loot: surviving attacker carry capacity, up to 33% of each resource
+                            int carryTotal = atkSurvived.Sum(kvp =>
+                                (unitDefs.TryGetValue(kvp.Key, out var uc) ? uc.CarryCapacity : 10) * kvp.Value);
+
+                            var looted = new Dictionary<string, int>
+                                { ["water"]=0, ["food"]=0, ["scrap"]=0, ["fuel"]=0, ["energy"]=0 };
+
+                            if (atkWins && carryTotal > 0)
+                            {
+                                var resPool = new (string name, int avail)[]
+                                {
+                                    ("water",  defSett.Resources.Water),
+                                    ("food",   defSett.Resources.Food),
+                                    ("scrap",  defSett.Resources.Scrap),
+                                    ("fuel",   defSett.Resources.Fuel),
+                                    ("energy", defSett.Resources.Energy),
+                                };
+                                int carryLeft = carryTotal;
+                                foreach (var (rn, ra) in resPool)
+                                {
+                                    if (carryLeft <= 0) break;
+                                    int maxTake = (int)(ra * 0.33);
+                                    int take = Math.Min(maxTake, carryLeft);
+                                    if (take > 0) { looted[rn] = take; carryLeft -= take; }
+                                }
+                                defSett.Resources.Spend(
+                                    water:  looted["water"],
+                                    food:   looted["food"],
+                                    scrap:  looted["scrap"],
+                                    fuel:   looted["fuel"],
+                                    energy: looted["energy"]);
+                            }
+
+                            var battleJson = JsonSerializer.Serialize(new
+                            {
+                                isSettlementBattleReport = true,
+                                attackerWins = atkWins,
+                                attackerSentUnits = sentUnitsAtk,
+                                attackerLosses = atkLosses,
+                                attackerSurvived = atkSurvived,
+                                defenderUnits = defUnits,
+                                defenderLosses = defLosses,
+                                defenderSurvived = defSurvived,
+                                lootedResources = looted,
+                                attackerSettlementName = atkSett.Name,
+                                defenderSettlementName = defSett.Name,
+                            });
+                            op.SetResult(battleJson);
+
+                            // Reports
+                            var atkPlayer = await _db.Players.FirstOrDefaultAsync(p => p.Id == atkSett.PlayerId);
+                            var defPlayer = await _db.Players.FirstOrDefaultAsync(p => p.Id == defSett.PlayerId);
+
+                            if (atkPlayer != null)
+                            {
+                                _db.Messages.Add(new Message(
+                                    senderPlayerId: atkPlayer.Id,
+                                    receiverPlayerId: atkPlayer.Id,
+                                    subject: atkWins
+                                        ? $"\u2694 Victory \u2014 {defSett.Name}"
+                                        : $"\u2717 Defeat \u2014 {defSett.Name}",
+                                    body: battleJson,
+                                    messageType: "report"));
+                            }
+                            if (defPlayer != null && (atkPlayer == null || defPlayer.Id != atkPlayer.Id))
+                            {
+                                var defBodyJson = JsonSerializer.Serialize(new
+                                {
+                                    isSettlementBattleReport = true,
+                                    isDefenseReport = true,
+                                    attackerWins = atkWins,
+                                    attackerSentUnits = sentUnitsAtk,
+                                    attackerLosses = atkLosses,
+                                    attackerSurvived = atkSurvived,
+                                    defenderUnits = defUnits,
+                                    defenderLosses = defLosses,
+                                    defenderSurvived = defSurvived,
+                                    lootedResources = looted,
+                                    attackerSettlementName = atkSett.Name,
+                                    defenderSettlementName = defSett.Name,
+                                });
+                                _db.Messages.Add(new Message(
+                                    senderPlayerId: defPlayer.Id,
+                                    receiverPlayerId: defPlayer.Id,
+                                    subject: atkWins
+                                        ? $"\u26a0 Your settlement was raided by {atkSett.Name}"
+                                        : $"\u2713 Attack repelled from {atkSett.Name}",
+                                    body: defBodyJson,
+                                    messageType: "report"));
+                            }
+                        }
+                    }
+
                     op.MarkArrived();
                     // Scout: immediately start returning so it doesn't clutter movements panel.
                     // Frontend reads resultJson from the 24h window filter.
@@ -296,12 +476,178 @@ namespace TheFallenWastes_WebAPI.Controllers
                         int returnSeconds = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                         op.MarkReturning(returnSeconds);
                     }
+                    // Settlement attack: troops automatically return (no garrison without convoy)
+                    if (op.OperationType == "attack_settlement")
+                    {
+                        int returnSecs = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
+                        op.MarkReturning(returnSecs);
+                    }
+                }
+                else if (op.Phase == "arrived" && op.OperationType == "attack_settlement"
+                    && op.ResultJson == null && op.TargetSettlementId.HasValue)
+                {
+                    // Orphaned arrived ops: battle never resolved (deployed before combat code).
+                    // Resolve combat now, then immediately start returning.
+                    var atkSett2 = await _db.Settlements.Include(s => s.Buildings)
+                        .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+                    var defSett2 = await _db.Settlements.Include(s => s.Buildings)
+                        .FirstOrDefaultAsync(s => s.Id == op.TargetSettlementId.Value);
+                    if (atkSett2 != null && defSett2 != null)
+                    {
+                        var unitDefs2 = TheFallenWastes_Domain.UnitFactory.UnitFactory.CreateStarterUnits()
+                            .ToDictionary(u => u.Name, u => u, StringComparer.OrdinalIgnoreCase);
+                        var sent2 = string.IsNullOrEmpty(op.SentUnitsJson)
+                            ? new Dictionary<string, int>()
+                            : JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson) ?? new Dictionary<string, int>();
+                        var def2 = new Dictionary<string, int>(defSett2.UnitInventory, StringComparer.OrdinalIgnoreCase);
+                        int atk2 = sent2.Sum(kvp => (unitDefs2.TryGetValue(kvp.Key, out var ua) ? ua.AttackPower : 10) * kvp.Value);
+                        int def2p = def2.Sum(kvp => (unitDefs2.TryGetValue(kvp.Key, out var ud) ? ud.DefenseVsBallistic : 5) * kvp.Value);
+                        bool wins2 = atk2 > def2p;
+                        var aLoss2 = new Dictionary<string, int>();
+                        var dLoss2 = new Dictionary<string, int>();
+                        if (wins2)
+                        {
+                            dLoss2 = def2.ToDictionary(k => k.Key, k => k.Value);
+                            double lr = def2p > 0 ? Math.Min(0.85, (double)def2p / atk2) : 0.0;
+                            foreach (var kvp in sent2) { int l = (int)Math.Ceiling(kvp.Value * lr); if (l > 0) aLoss2[kvp.Key] = Math.Min(l, kvp.Value); }
+                        }
+                        else
+                        {
+                            aLoss2 = sent2.ToDictionary(k => k.Key, k => k.Value);
+                            double dlr = atk2 > 0 ? Math.Min(0.50, (double)atk2 / def2p) : 0.0;
+                            foreach (var kvp in def2) { int l = (int)Math.Floor(kvp.Value * dlr); if (l > 0) dLoss2[kvp.Key] = l; }
+                        }
+                        foreach (var kvp in dLoss2)
+                        {
+                            if (defSett2.UnitInventory.TryGetValue(kvp.Key, out int cur2))
+                            { int rem = cur2 - kvp.Value; if (rem <= 0) defSett2.UnitInventory.Remove(kvp.Key); else defSett2.UnitInventory[kvp.Key] = rem; }
+                        }
+                        _db.Entry(defSett2).Property(s => s.UnitInventory).IsModified = true;
+                        var surv2 = sent2.ToDictionary(k => k.Key, k => k.Value - (aLoss2.TryGetValue(k.Key, out var al2) ? al2 : 0)).Where(k => k.Value > 0).ToDictionary(k => k.Key, k => k.Value);
+                        var dSurv2 = def2.ToDictionary(k => k.Key, k => k.Value - (dLoss2.TryGetValue(k.Key, out var dl2) ? dl2 : 0)).Where(k => k.Value > 0).ToDictionary(k => k.Key, k => k.Value);
+                        int carry2 = surv2.Sum(kvp => (unitDefs2.TryGetValue(kvp.Key, out var uc2) ? uc2.CarryCapacity : 10) * kvp.Value);
+                        var loot2 = new Dictionary<string, int> { ["water"]=0, ["food"]=0, ["scrap"]=0, ["fuel"]=0, ["energy"]=0 };
+                        if (wins2 && carry2 > 0)
+                        {
+                            int cl2 = carry2;
+                            foreach (var (rn, ra) in new[] { ("water", defSett2.Resources.Water), ("food", defSett2.Resources.Food), ("scrap", defSett2.Resources.Scrap), ("fuel", defSett2.Resources.Fuel), ("energy", defSett2.Resources.Energy) })
+                            { if (cl2 <= 0) break; int take2 = Math.Min((int)(ra * 0.33), cl2); if (take2 > 0) { loot2[rn] = take2; cl2 -= take2; } }
+                            defSett2.Resources.Spend(water: loot2["water"], food: loot2["food"], scrap: loot2["scrap"], fuel: loot2["fuel"], energy: loot2["energy"]);
+                        }
+                        var bj2 = JsonSerializer.Serialize(new
+                        {
+                            isSettlementBattleReport = true,
+                            attackerWins = wins2,
+                            attackerSentUnits = sent2, attackerLosses = aLoss2, attackerSurvived = surv2,
+                            defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2,
+                            lootedResources = loot2,
+                            attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name,
+                        });
+                        op.SetResult(bj2);
+                        var ap2 = await _db.Players.FirstOrDefaultAsync(p => p.Id == atkSett2.PlayerId);
+                        var dp2 = await _db.Players.FirstOrDefaultAsync(p => p.Id == defSett2.PlayerId);
+                        if (ap2 != null)
+                            _db.Messages.Add(new Message(ap2.Id, ap2.Id,
+                                wins2 ? $"\u2694 Victory \u2014 {defSett2.Name}" : $"\u2717 Defeat \u2014 {defSett2.Name}",
+                                bj2, "report"));
+                        if (dp2 != null && (ap2 == null || dp2.Id != ap2.Id))
+                            _db.Messages.Add(new Message(dp2.Id, dp2.Id,
+                                wins2 ? $"\u26a0 Your settlement was raided by {atkSett2.Name}" : $"\u2713 Attack repelled from {atkSett2.Name}",
+                                JsonSerializer.Serialize(new { isSettlementBattleReport = true, isDefenseReport = true, attackerWins = wins2, attackerSentUnits = sent2, attackerLosses = aLoss2, attackerSurvived = surv2, defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2, lootedResources = loot2, attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name }),
+                                "report"));
+                    }
+                    int retSecs2 = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
+                    op.MarkReturning(retSecs2);
                 }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
+                {
+                    // Settlement attack return: restore surviving units + loot to attacker
+                    if (op.OperationType == "attack_settlement"
+                        && op.AttackerSettlementId == settlementId
+                        && !string.IsNullOrEmpty(op.ResultJson))
+                    {
+                        var homeSett = await _db.Settlements
+                            .Include(s => s.Buildings)
+                            .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+                        if (homeSett != null)
+                        {
+                            try
+                            {
+                                using var doc = JsonDocument.Parse(op.ResultJson);
+                                var root = doc.RootElement;
+
+                                if (root.TryGetProperty("attackerSurvived", out var survEl))
+                                {
+                                    foreach (var unit in survEl.EnumerateObject())
+                                    {
+                                        int qty = unit.Value.GetInt32();
+                                        if (qty > 0)
+                                        {
+                                            homeSett.UnitInventory.TryGetValue(unit.Name, out int existing);
+                                            homeSett.UnitInventory[unit.Name] = existing + qty;
+                                        }
+                                    }
+                                    _db.Entry(homeSett).Property(s => s.UnitInventory).IsModified = true;
+                                }
+
+                                if (root.TryGetProperty("lootedResources", out var lootEl))
+                                {
+                                    int lw  = lootEl.TryGetProperty("water",  out var we)  ? we.GetInt32()  : 0;
+                                    int lf  = lootEl.TryGetProperty("food",   out var fe)  ? fe.GetInt32()  : 0;
+                                    int ls  = lootEl.TryGetProperty("scrap",  out var se)  ? se.GetInt32()  : 0;
+                                    int lfu = lootEl.TryGetProperty("fuel",   out var fue) ? fue.GetInt32() : 0;
+                                    int le  = lootEl.TryGetProperty("energy", out var ee)  ? ee.GetInt32()  : 0;
+                                    homeSett.AddResourcesCapped(lw, lf, ls, lfu, le, 0);
+                                }
+                            }
+                            catch { /* ignore parse errors — op still completes */ }
+                        }
+                    }
                     op.MarkCompleted(op.ResultJson ?? "{}");
+                }
             }
 
             await _db.SaveChangesAsync();
+
+            // ── POI Relocation check ──────────────────────────────────────────
+            // Every 12 h, if a POI has no players present or inbound, relocate it.
+            var allPoiStates = await _db.PoiStates.ToListAsync();
+            var allActiveOps = await _db.Operations
+                .Where(o => o.Phase == "outbound" || o.Phase == "arrived")
+                .ToListAsync();
+
+            bool relocationsTriggered = false;
+            foreach (var poiState in allPoiStates)
+            {
+                // Complete the 3-second grace period for any already-relocating POI
+                if (poiState.IsRelocating && poiState.RelocatingAtUtc.HasValue &&
+                    (DateTime.UtcNow - poiState.RelocatingAtUtc.Value).TotalSeconds >= 3)
+                {
+                    poiState.CompleteRelocation();
+                    relocationsTriggered = true;
+                    continue;
+                }
+
+                if (poiState.IsRelocating) continue;
+
+                // Only consider initialized POIs whose 12-hour window has opened
+                if (!poiState.IsInitialized || DateTime.UtcNow < poiState.NextRespawnUtc)
+                    continue;
+
+                bool hasArrived = allActiveOps.Any(o =>
+                    o.TargetPoiId == poiState.PoiId && o.Phase == "arrived");
+                bool hasInbound = allActiveOps.Any(o =>
+                    o.TargetPoiId == poiState.PoiId && o.Phase == "outbound");
+
+                if (!hasArrived && !hasInbound)
+                {
+                    poiState.TriggerRelocation();
+                    relocationsTriggered = true;
+                }
+            }
+
+            if (relocationsTriggered)
+                await _db.SaveChangesAsync();
 
             // Collect settlement IDs for name resolution
             var attackerIds = operations.Select(o => o.AttackerSettlementId).Distinct().ToList();

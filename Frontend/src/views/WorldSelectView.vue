@@ -110,8 +110,8 @@ function joinWorld(world) {
   sessionStorage.setItem('worldName', world.name)
 
   if (world.hasCharacter) {
-    // Direct naar game
-    router.push('/game')
+    // Direct naar game — open the map first
+    router.push('/game/wasteland')
   } else {
     // Naar settlement-naam kiezen voor deze wereld
     router.push('/game/new-settlement')

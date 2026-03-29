@@ -1,5 +1,5 @@
 <template>
-  <div class="game-layout" v-if="player">
+  <div class="game-layout" v-if="player" :class="{ 'under-attack': underAttack }">
     <header class="topbar">
       <div class="topbar-scan" />
 
@@ -10,6 +10,26 @@
         </div>
         <div>
           <div class="topbar-title">THE FALLEN WASTES</div>
+        </div>
+      </div>
+
+      <!-- Settlement Switcher -->
+      <div class="tb-sett" ref="settlementMenuRef">
+        <button class="tb-sett-btn" @click="settlementMenuOpen = !settlementMenuOpen">
+          <span class="tb-sett-icon">🏚️</span>
+          <span class="tb-sett-name">{{ settlement?.name ?? '...' }}</span>
+          <span class="tb-sett-arr">{{ settlementMenuOpen ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="settlementMenuOpen" class="tb-sett-drop">
+          <div
+              v-for="s in allSettlements"
+              :key="s.id"
+              class="tb-sett-item"
+              :class="{ 'tb-sett-item--active': s.id === settlement?.id }"
+              @click="switchSettlement(s)"
+          >
+            <span>🏚️</span>{{ s.name }}
+          </div>
         </div>
       </div>
 
@@ -122,6 +142,7 @@
               <div class="sidebar-score">Score: {{ player.score }}</div>
             </div>
           </div>
+          <button class="sidebar-logout" @click="logout">LOG OUT</button>
         </div>
       </nav>
 
@@ -158,8 +179,12 @@ const router = useRouter()
 
 const player = ref(null)
 const settlement = ref(null)
+const allSettlements = ref([])
+const settlementMenuOpen = ref(false)
+const settlementMenuRef = ref(null)
 const time = ref(new Date())
 const unreadMessagesCount = ref(0)
+const underAttack = ref(false)
 let timerInterval = null
 let refreshInFlight = null
 
@@ -384,6 +409,10 @@ function onUnreadMessagesUpdated(event) {
   unreadMessagesCount.value = event.detail?.count ?? 0
 }
 
+function onUnderAttackChanged(event) {
+  underAttack.value = event.detail?.underAttack ?? false
+}
+
 function setPlayerData(data) {
   player.value = {
     id: data.id,
@@ -401,7 +430,13 @@ function setPlayerData(data) {
     }
   }
 
-  const s = data.settlement || data.csharpSettlements?.[0]
+  const settlements = data.csharpSettlements ?? (data.settlement ? [data.settlement] : [])
+  allSettlements.value = settlements
+
+  const storedId = sessionStorage.getItem('settlementId')
+  const s = (storedId && settlements.find(x => x.id === storedId))
+         || data.settlement
+         || settlements[0]
   if (s) {
     settlement.value = {
       id: s.id,
@@ -422,6 +457,45 @@ function setPlayerData(data) {
       raidVaultLevel: data.raidVaultLevel ?? s?.raidVaultLevel ?? 0,
       unitInventory: s.unitInventory ?? s.UnitInventory ?? {}
     }
+    sessionStorage.setItem('settlementId', s.id)
+  }
+}
+
+async function switchSettlement(s) {
+  settlementMenuOpen.value = false
+  settlement.value = {
+    id: s.id,
+    name: s.name,
+    playerId: s.playerId,
+    usedPopulation: s.usedPopulation ?? 0,
+    populationCapacity: s.populationCapacity ?? 0,
+    availablePopulation: s.availablePopulation ?? 0,
+    morale: s.morale ?? 0,
+    water: s.water ?? s.resources?.water ?? 0,
+    food: s.food ?? s.resources?.food ?? 0,
+    scrap: s.scrap ?? s.resources?.scrap ?? 0,
+    fuel: s.fuel ?? s.resources?.fuel ?? 0,
+    energy: s.energy ?? s.resources?.energy ?? 0,
+    rareTech: s.rareTech ?? s.resources?.rareTech ?? 0,
+    vaultRareTech: s.vaultRareTech ?? 0,
+    raidVaultCapacity: s.raidVaultCapacity ?? 0,
+    raidVaultLevel: s.raidVaultLevel ?? 0,
+    unitInventory: s.unitInventory ?? {}
+  }
+  sessionStorage.setItem('settlementId', s.id)
+  baseResources.value = null
+  production.value = null
+  await loadSettlementData()
+}
+
+function logout() {
+  sessionStorage.clear()
+  router.push('/')
+}
+
+function onDocumentClick(e) {
+  if (settlementMenuRef.value && !settlementMenuRef.value.contains(e.target)) {
+    settlementMenuOpen.value = false
   }
 }
 
@@ -455,6 +529,8 @@ onMounted(async () => {
   }, 1000)
 
   window.addEventListener('messages-unread-updated', onUnreadMessagesUpdated)
+  window.addEventListener('under-attack-changed', onUnderAttackChanged)
+  document.addEventListener('click', onDocumentClick)
 
   const playerId = sessionStorage.getItem('playerId')
   const cached = sessionStorage.getItem('playerData')
@@ -490,6 +566,8 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(timerInterval)
   window.removeEventListener('messages-unread-updated', onUnreadMessagesUpdated)
+  window.removeEventListener('under-attack-changed', onUnderAttackChanged)
+  document.removeEventListener('click', onDocumentClick)
 })
 </script>
 
@@ -519,6 +597,22 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   animation: fadeInUp 0.4s ease-out;
+}
+
+.game-layout.under-attack::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  border: 3px solid rgba(255, 40, 40, 0.9);
+  box-shadow: inset 0 0 60px rgba(255, 40, 40, 0.18), 0 0 30px rgba(255, 40, 40, 0.12);
+  pointer-events: none;
+  z-index: 99999;
+  animation: attackGlow 1.8s ease-in-out infinite;
+}
+
+@keyframes attackGlow {
+  0%, 100% { border-color: rgba(255,40,40,.55); box-shadow: inset 0 0 40px rgba(255,40,40,.10); }
+  50%       { border-color: rgba(255,40,40,1);   box-shadow: inset 0 0 90px rgba(255,40,40,.30); }
 }
 
 .game-body {
@@ -869,6 +963,104 @@ onUnmounted(() => {
 .sidebar-score {
   font-size: 9px;
   color: var(--muted);
+}
+
+.sidebar-logout {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 5px 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--ff-title), sans-serif;
+  font-size: 9px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sidebar-logout:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Settlement switcher in topbar */
+.tb-sett {
+  position: relative;
+  z-index: 20;
+}
+
+.tb-sett-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border-bright);
+  color: var(--bright);
+  font-family: var(--ff-title), sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tb-sett-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.tb-sett-icon {
+  font-size: 13px;
+}
+
+.tb-sett-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tb-sett-arr {
+  font-size: 8px;
+  color: var(--muted);
+}
+
+.tb-sett-drop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--bg2);
+  border: 1px solid var(--border-bright);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 100;
+}
+
+.tb-sett-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--ff-title), sans-serif;
+  letter-spacing: 0.5px;
+  border-left: 2px solid transparent;
+  transition: all 0.1s;
+}
+
+.tb-sett-item:hover {
+  background: rgba(0,212,255,0.05);
+  color: var(--bright);
+}
+
+.tb-sett-item--active {
+  color: var(--cyan);
+  border-left-color: var(--cyan);
+  background: rgba(0,212,255,0.04);
 }
 
 .loading-screen {

@@ -7,14 +7,15 @@
       </div>
       <div class="tb-center">[ {{ viewX }}, {{ viewY }} ] — {{ claimedCount }}/{{ slots.length }} claimed</div>
       <div class="tb-right">
-        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0">
+        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0 || incomingOps.length > 0">
           <button class="tb-btn tb-movements-btn"
                   @click="showMovementsPanel = !showMovementsPanel"
                   :class="{ 'tb-movements-btn--active': showMovementsPanel }">
             <span style="font-size:11px">⚡</span>
             <span style="font-size:11px;font-family:var(--ff-title);font-weight:700">
-              {{ allMovements.length }}
+              {{ allMovements.length + incomingOps.length }}
             </span>
+            <span v-if="incomingOps.length > 0" class="movements-incoming-badge">{{ incomingOps.length }}</span>
           </button>
 
           <div v-if="showMovementsPanel" class="movements-panel">
@@ -24,6 +25,28 @@
             </div>
 
             <div class="movements-list">
+              <!-- INKOMENDE AANVALLEN -->
+              <template v-if="incomingOps.length > 0">
+                <div class="movements-section-title movements-section-title--incoming">⚠ INKOMENDE AANVAL</div>
+                <div v-for="op in incomingOps" :key="'inc-'+op.id" class="movement-row movement-row--incoming" @click="focusOperation(op)">
+                  <div class="movement-icon">💀</div>
+                  <div class="movement-info">
+                    <div class="movement-target" style="color:#ff5050">{{ op.playerName ?? 'Onbekend' }}</div>
+                    <div class="movement-units">{{ op.unitSummary ?? '?' }}</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status" style="color:#ff4040">{{ op.phase === 'returning' ? '↩' : '→' }}</div>
+                    <div class="movement-time" style="color:#ff5050">
+                      {{ op.phase === 'returning' && op.returnsAtUtc
+                        ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.returnsAtUtc).getTime() - Date.now()) / 1000)))
+                        : op.arrivesAtUtc
+                          ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000)))
+                          : '—' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
               <!-- ONDERWEG -->
               <template v-if="allMovements.filter(o => o.phase === 'outbound').length > 0">
                 <div class="movements-section-title">ONDERWEG →</div>
@@ -83,7 +106,7 @@
                 </div>
               </template>
 
-              <div v-if="allMovements.length === 0" class="movements-empty">
+              <div v-if="allMovements.length === 0 && incomingOps.length === 0" class="movements-empty">
                 Geen actieve bewegingen
               </div>
             </div>
@@ -129,7 +152,7 @@
             <svg v-else viewBox="0 0 24 24" class="sm-house sm-house--empty"><path d="M12 4L3 12h2.5v7h4.5v-4h4v4h4.5v-7H21L12 4z" fill="currentColor" /></svg>
           </div>
         </div>
-        <div v-for="p in visiblePois" :key="p.id" class="poi" :class="[`poi--${p.type}`, { 'poi--active': arrivedPoiIds.has(p.id) }]" :style="{ left: p.x + 'px', top: p.y + 'px' }" @click.stop="selectPoi(p)" @mouseenter="onMarkerEnter(p, 'poi', $event)" @mouseleave="onMarkerLeave" @mousemove="onMarkerMove">
+        <div v-for="p in visiblePois" :key="p.id" class="poi" :class="[`poi--${p.type}`, { 'poi--active': arrivedPoiIds.has(p.id), 'poi--relocating': poiStates[p.id]?.isRelocating }]" :style="{ left: p.x + 'px', top: p.y + 'px' }" @click.stop="selectPoi(p)" @mouseenter="onMarkerEnter(p, 'poi', $event)" @mouseleave="onMarkerLeave" @mousemove="onMarkerMove">
           <div v-if="arrivedPoiIds.has(p.id)" class="poi-raid-glow" />
           <svg v-if="p.icon === 'factory'" viewBox="0 0 24 24" class="poi-svg"><path d="M2 20h20V12l-5 3V12l-5 3V12l-5 3V8l-5 4v8z" fill="currentColor"/><rect x="17" y="3" width="3" height="9" rx=".5" fill="currentColor" opacity=".8"/><rect x="13" y="5" width="2.5" height="7" rx=".5" fill="currentColor" opacity=".6"/></svg>
           <svg v-else-if="p.icon === 'gear'" viewBox="0 0 24 24" class="poi-svg"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63a.5.5 0 00.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65A.49.49 0 0014 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66a.5.5 0 00-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1.01c.22.08.49 0 .61-.22l2-3.46a.5.5 0 00-.12-.64l-2.11-1.66z" fill="currentColor"/></svg>
@@ -152,7 +175,7 @@
           </div>
         </template>
         <!-- Stippen: ENKEL eigen (cyaan) + alliantie (paars). Neutraal/vijand onzichtbaar. -->
-        <div v-for="op in activeOperationMarkers" :key="'op-' + op.id" class="op-dot" :class="{ 'op-dot--own': op.isOwn, 'op-dot--alliance': !op.isOwn && op.isAlliance }" :style="{ left: op.x + 'px', top: op.y + 'px' }" />
+        <div v-for="op in activeOperationMarkers" :key="'op-' + op.id" class="op-dot" :class="{ 'op-dot--own': op.isOwn, 'op-dot--alliance': !op.isOwn && op.isAlliance, 'op-dot--incoming': op.isIncoming }" :style="{ left: op.x + 'px', top: op.y + 'px' }" />
         <!-- Bewegingstimers op de kaart boven de dots -->
         <div v-for="op in activeOperationMarkers" :key="'timer-' + op.id"
              class="op-timer"
@@ -270,6 +293,10 @@
               <span class="pai-name">{{ op.playerName }}</span>
               <span class="pai-units">{{ op.unitSummary }}</span>
             </div>
+          </div>
+          <div v-if="poiStates[selPoi?.id]?.isRelocating"
+               style="padding:6px 12px;background:rgba(255,144,64,.1);border:1px solid rgba(255,144,64,.3);color:#ff9040;font-size:11px;font-family:var(--ff-title);letter-spacing:1px;margin-bottom:8px">
+            ⚠ POI RELOCATING — Troops returning automatically
           </div>
           <div class="sp-actions">
             <div class="sa-w" v-if="!ownArrivedAtSelectedPoi">
@@ -559,7 +586,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
 import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates, recallOperation } from '../services/api.js'
@@ -684,8 +711,55 @@ const activeOperationMarkers = computed(() => {
       }
     })
 
-  return [...outbound, ...returning]
+  const isEnemyOp = op => !op.isOwn && !op.isAlliance && op.targetSettlementId === props.settlement?.id
+
+  const incoming = operations.value
+    .filter(op => op.phase === 'outbound' && isEnemyOp(op))
+    .map(op => {
+      const progress = Math.min(1, (now - op.startTime) / op.travelDuration)
+      return {
+        ...op,
+        x: op.originX + (op.destX - op.originX) * progress,
+        y: op.originY + (op.destY - op.originY) * progress,
+        isIncoming: true,
+      }
+    })
+
+  // Enemy returning after attacking: red dot moving back to their settlement
+  const enemyReturning = operations.value
+    .filter(op => op.phase === 'returning' && isEnemyOp(op) && op.returnsAtUtc)
+    .map(op => {
+      const returnStartMs = new Date(op.returnsAtUtc).getTime() - op.travelDuration
+      const elapsed = now - returnStartMs
+      const progress = op.travelDuration > 0
+        ? Math.min(1, Math.max(0, elapsed / op.travelDuration))
+        : 1
+      return {
+        ...op,
+        x: op.destX + (op.originX - op.destX) * progress,
+        y: op.destY + (op.originY - op.destY) * progress,
+        isIncoming: true,
+      }
+    })
+
+  return [...outbound, ...returning, ...incoming, ...enemyReturning]
 })
+
+const incomingOps = computed(() =>
+  operations.value.filter(op =>
+    !op.isOwn && !op.isAlliance &&
+    (op.phase === 'outbound' || op.phase === 'returning') &&
+    op.targetSettlementId === props.settlement?.id
+  )
+)
+
+const isUnderAttack = computed(() =>
+  incomingOps.value.some(op => op.phase === 'outbound')
+)
+
+watch(isUnderAttack, val => {
+  window.dispatchEvent(new CustomEvent('under-attack-changed', { detail: { underAttack: val } }))
+}, { immediate: true })
 
 // Alliantieleden aanwezig in POI — zichtbaar in panel met naam + troepen
 function allianceAtPoi(poiId) {
@@ -721,6 +795,7 @@ function markReportShown(id) {
 }
 
 const poiStates = ref({})
+const poiGenerationSeeds = ref({})
 const combatResult = ref(null)
 const attackModal = ref({
   open: false, type: 'poi', raidMode: 'quick',
@@ -943,6 +1018,7 @@ async function loadOperations() {
       arrivesAtUtc: utcStr(op.arrivesAtUtc),
       isOwn: op.isOwn,
       isAlliance: false,
+      attackerSettlementId: op.attackerSettlementId ?? null,
       poiId: op.targetPoiId ?? null,
       targetSettlementId: op.targetSettlementId ?? null,
       playerName: op.originSettlementName ?? 'Unknown',
@@ -974,6 +1050,10 @@ async function loadOperations() {
     operations.value.forEach(op => {
       const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
       if (ownSlot && op.isOwn) { op.originX = ownSlot.x; op.originY = ownSlot.y }
+      if (!op.isOwn && op.attackerSettlementId) {
+        const attackerSlot = slots.value.find(s => s.id === op.attackerSettlementId)
+        if (attackerSlot) { op.originX = attackerSlot.x; op.originY = attackerSlot.y }
+      }
       if (op.poiId) {
         const poi = pois.value.find(p => p.id === op.poiId)
         if (poi) { op.destX = poi.x; op.destY = poi.y }
@@ -1033,7 +1113,55 @@ async function loadPoiStates() {
     const data = await getPoiStates()
     poiStates.value = {}
     ;(data || []).forEach(s => { poiStates.value[s.poiId] = s })
+
+    // Rebuild generation seeds as a fresh object so the watch detects changes
+    const newSeeds = {}
+    ;(data || []).forEach(s => { newSeeds[s.poiId] = s.generationSeed ?? 0 })
+    poiGenerationSeeds.value = newSeeds
+
+    // Auto-recall own troops if their POI is now relocating
+    const ownArrivedOps = operations.value.filter(op =>
+      op.isOwn && op.phase === 'arrived' && op.poiId
+    )
+    for (const op of ownArrivedOps) {
+      const poiState = poiStates.value[op.poiId]
+      if (poiState?.isRelocating && !String(op.id).startsWith('local-')) {
+        try {
+          await recallOperation(props.settlement.id, op.id)
+          console.log('[POI RELOCATE] Auto-recalled troops from', op.poiId)
+        } catch (e) {
+          console.warn('[POI RELOCATE] Auto-recall failed:', e)
+        }
+      }
+    }
   } catch {}
+}
+
+watch(poiGenerationSeeds, (newSeeds, oldSeeds) => {
+  let changed = false
+  for (const [poiId, seed] of Object.entries(newSeeds)) {
+    if ((oldSeeds?.[poiId] ?? 0) !== seed) { changed = true; break }
+  }
+  if (!changed) return
+  regeneratePoisWithSeeds(newSeeds)
+})
+
+function regeneratePoisWithSeeds(seeds) {
+  if (!worldRenderer) return
+  const combinedSeed = Object.values(seeds).reduce((acc, s) => acc + s, 0)
+  const newPois = generatePOIsFromElevation({
+    worldWidth: WW, worldHeight: WH,
+    worldSeed: worldSeed + combinedSeed,
+    getElevation: worldRenderer.getElevation,
+    waterLevel: worldRenderer.waterLevel,
+    slots: slots.value
+  })
+  pois.value = newPois.map((newPoi, i) => {
+    const oldPoi = pois.value[i]
+    if (oldPoi) newPoi.discovered = oldPoi.discovered
+    return newPoi
+  })
+  renderMap(); renderMini()
 }
 
 function openAttackModal(type) {
@@ -1417,9 +1545,10 @@ function renderMap() {
   let _drewReturning = 0
   for (const op of operations.value) {
     if (op.phase !== 'outbound' && op.phase !== 'returning') continue
-    if (!op.isOwn && !op.isAlliance) continue
+    const isIncomingAttack = !op.isOwn && !op.isAlliance && op.targetSettlementId === props.settlement?.id
+    if (!op.isOwn && !op.isAlliance && !isIncomingAttack) continue
     if (op.phase === 'returning') _drewReturning++
-    const color = op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
+    const color = isIncomingAttack ? 'rgba(255,40,40,0.85)' : op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
     ctx.save()
     ctx.setLineDash([5 / zoom.value, 7 / zoom.value])
     ctx.lineWidth = 1.5 / zoom.value
@@ -1659,6 +1788,7 @@ onUnmounted(() => {
 .op-dot{position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:4}
 .op-dot--own{background:rgba(0,212,255,.95);box-shadow:0 0 0 2px rgba(0,212,255,.25),0 0 10px rgba(0,212,255,.7),0 0 20px rgba(0,212,255,.3)}
 .op-dot--alliance{background:rgba(180,128,255,.95);box-shadow:0 0 0 2px rgba(180,128,255,.25),0 0 10px rgba(180,128,255,.6),0 0 18px rgba(180,128,255,.25)}
+.op-dot--incoming{background:rgba(255,40,40,.95);box-shadow:0 0 0 2px rgba(255,40,40,.3),0 0 10px rgba(255,40,40,.8),0 0 22px rgba(255,40,40,.4)}
 .op-dot{animation:opPulse 1.6s infinite ease-in-out}
 @keyframes opPulse{0%{transform:translate(-50%,-50%) scale(1);opacity:1}50%{transform:translate(-50%,-50%) scale(1.25);opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
 .poi-label{position:absolute;transform:translate(-50%,0);font-size:7px;color:rgba(0,212,255,.7);font-family:var(--ff-title);letter-spacing:.8px;font-weight:700;pointer-events:none;text-shadow:0 0 3px rgba(0,0,0,1),0 0 6px rgba(0,0,0,1),0 0 10px rgba(0,0,0,.8);text-align:center;white-space:nowrap;line-height:1.1}
@@ -1798,6 +1928,8 @@ onUnmounted(() => {
 .sa--recall:hover{background:rgba(255,200,64,.15)}
 .sa--raid:disabled{opacity:.35;cursor:not-allowed}
 .poi-cleared-badge{font-size:10px;color:#ff9040;font-family:var(--ff-title);letter-spacing:1px;padding:2px 8px;border:1px solid rgba(255,144,64,.3);background:rgba(255,144,64,.05)}
+.poi--relocating{animation:poiRelocate 3s ease-out forwards;pointer-events:none}
+@keyframes poiRelocate{0%{opacity:1;transform:scale(1)}70%{opacity:.3;transform:scale(1.4)}100%{opacity:0;transform:scale(0)}}
 .modal-box--wide{width:min(560px,94vw)}
 .modal-unit-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
 .modal-unit-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);background:rgba(0,212,255,.02)}
@@ -1825,6 +1957,10 @@ onUnmounted(() => {
 .movements-panel{position:absolute;top:calc(100% + 8px);right:0;width:320px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200;display:flex;flex-direction:column;max-height:420px}
 .movements-list{overflow-y:auto;flex:1;max-height:340px}
 .movements-section-title{padding:6px 14px;font-size:8px;color:var(--cyan);letter-spacing:2px;font-family:var(--ff-title);font-weight:700;background:rgba(0,212,255,.04);border-bottom:1px solid var(--border);border-top:1px solid var(--border)}
+.movements-section-title--incoming{color:#ff5050;background:rgba(255,40,40,.07);border-color:rgba(255,40,40,.25)}
+.movement-row--incoming{background:rgba(255,40,40,.04);border-bottom-color:rgba(255,40,40,.15)}
+.movement-row--incoming:hover{background:rgba(255,40,40,.09)}
+.movements-incoming-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;border-radius:7px;background:#ff3030;color:#fff;font-size:9px;font-family:var(--ff-title);font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
 .movements-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(0,212,255,.06),transparent)}
 .movements-title{font-family:var(--ff-title);font-size:9px;color:var(--cyan);letter-spacing:2px;font-weight:700}
 .movements-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px}

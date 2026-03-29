@@ -171,8 +171,88 @@
             </div>
           </div>
 
-          <!-- BATTLE REPORT -->
-          <div v-if="parsedReportBody?.attackerWins !== undefined" class="report-card">
+          <!-- SETTLEMENT BATTLE REPORT -->
+          <div v-if="parsedReportBody?.isSettlementBattleReport" class="report-card">
+            <div class="report-outcome"
+              :class="(parsedReportBody.isDefenseReport ? !parsedReportBody.attackerWins : parsedReportBody.attackerWins) ? 'outcome--win' : 'outcome--loss'">
+              <template v-if="parsedReportBody.isDefenseReport">
+                {{ parsedReportBody.attackerWins ? '⚠ YOUR SETTLEMENT WAS RAIDED' : '✓ ATTACK REPELLED' }}
+              </template>
+              <template v-else>
+                {{ parsedReportBody.attackerWins ? '⚔ VICTORY' : '✗ DEFEAT' }}
+              </template>
+            </div>
+
+            <div class="report-section-title">{{ parsedReportBody.isDefenseReport ? 'ATTACKED BY' : 'TARGET SETTLEMENT' }}</div>
+            <div class="report-poi-name">{{ parsedReportBody.isDefenseReport ? parsedReportBody.attackerSettlementName : parsedReportBody.defenderSettlementName }}</div>
+
+            <div class="report-columns">
+              <div class="report-col">
+                <div class="report-section-title">ATTACKING FORCES</div>
+                <div v-for="(qty, name) in parsedReportBody.attackerSentUnits" :key="'as'+name" class="report-unit-row">
+                  <span class="report-unit-icon">
+                    <img v-if="getUnitImage(name)" :src="getUnitImage(name)" class="unit-img-small" :alt="name" />
+                    <span v-else>⚔</span>
+                  </span>
+                  <span class="report-unit-name">{{ name }}</span>
+                  <span class="report-unit-qty">× {{ qty }}</span>
+                </div>
+                <template v-if="Object.keys(parsedReportBody.attackerLosses ?? {}).length">
+                  <div class="report-section-title" style="margin-top:8px;color:#ff6060">LOSSES</div>
+                  <div v-for="(qty, name) in parsedReportBody.attackerLosses" :key="'al'+name" class="report-unit-row report-unit-row--loss">
+                    <span class="report-unit-icon">
+                      <img v-if="getUnitImage(name)" :src="getUnitImage(name)" class="unit-img-small" :alt="name" />
+                      <span v-else>💀</span>
+                    </span>
+                    <span class="report-unit-name">{{ name }}</span>
+                    <span class="report-unit-qty report-qty--red">−{{ qty }}</span>
+                  </div>
+                </template>
+                <div v-else style="font-size:11px;color:var(--green);margin-top:4px">No losses</div>
+              </div>
+
+              <div class="report-col">
+                <div class="report-section-title">DEFENDER GARRISON</div>
+                <template v-if="Object.keys(parsedReportBody.defenderUnits ?? {}).length">
+                  <div v-for="(qty, name) in parsedReportBody.defenderUnits" :key="'du'+name" class="report-unit-row">
+                    <span class="report-unit-icon">
+                      <img v-if="getUnitImage(name)" :src="getUnitImage(name)" class="unit-img-small" :alt="name" />
+                      <span v-else>🛡</span>
+                    </span>
+                    <span class="report-unit-name">{{ name }}</span>
+                    <span class="report-unit-qty">× {{ qty }}</span>
+                  </div>
+                </template>
+                <div v-else style="font-size:11px;color:var(--muted);padding:4px 0">No garrison</div>
+                <template v-if="Object.keys(parsedReportBody.defenderLosses ?? {}).length">
+                  <div class="report-section-title" style="margin-top:8px;color:#ff6060">LOSSES</div>
+                  <div v-for="(qty, name) in parsedReportBody.defenderLosses" :key="'dl'+name" class="report-unit-row report-unit-row--loss">
+                    <span class="report-unit-icon">💀</span>
+                    <span class="report-unit-name">{{ name }}</span>
+                    <span class="report-unit-qty report-qty--red">−{{ qty }}</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <template v-if="Object.values(parsedReportBody.lootedResources ?? {}).some(v => v > 0)">
+              <div class="report-section-title" style="margin-top:10px">
+                {{ parsedReportBody.isDefenseReport ? 'RESOURCES PLUNDERED' : 'PLUNDER COLLECTED' }}
+              </div>
+              <div class="report-loot-box">
+                <div v-if="parsedReportBody.lootedResources.water  > 0" class="report-loot-item">💧 Water  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.water }}</div>
+                <div v-if="parsedReportBody.lootedResources.food   > 0" class="report-loot-item">🥫 Food   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.food }}</div>
+                <div v-if="parsedReportBody.lootedResources.scrap  > 0" class="report-loot-item">⚙️ Scrap  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.scrap }}</div>
+                <div v-if="parsedReportBody.lootedResources.fuel   > 0" class="report-loot-item">⛽ Fuel   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.fuel }}</div>
+                <div v-if="parsedReportBody.lootedResources.energy > 0" class="report-loot-item">⚡ Energy {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.energy }}</div>
+              </div>
+            </template>
+            <div v-else-if="parsedReportBody.attackerWins && !parsedReportBody.isDefenseReport"
+                 style="font-size:11px;color:var(--muted)">No resources to plunder.</div>
+          </div>
+
+          <!-- POI/NPC BATTLE REPORT -->
+          <div v-else-if="parsedReportBody?.attackerWins !== undefined" class="report-card">
             <div class="report-outcome" :class="parsedReportBody.attackerWins ? 'outcome--win' : 'outcome--loss'">
               {{ parsedReportBody.attackerWins ? '⚔ VICTORY' : '✗ DEFEATED' }}
             </div>

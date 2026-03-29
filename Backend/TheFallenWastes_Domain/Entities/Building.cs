@@ -78,6 +78,18 @@ namespace TheFallenWastes_Domain.Entities
             return true;
         }
 
+        /// <summary>Instantly completes construction regardless of remaining time.</summary>
+        public bool ForceComplete()
+        {
+            if (!IsConstructing) return false;
+            Level = TargetLevel;
+            IsConstructing = false;
+            ConstructionStartUtc = null;
+            ConstructionEndUtc = null;
+            TargetLevel = 0;
+            return true;
+        }
+
         public void CancelConstruction()
         {
             if (!IsConstructing)

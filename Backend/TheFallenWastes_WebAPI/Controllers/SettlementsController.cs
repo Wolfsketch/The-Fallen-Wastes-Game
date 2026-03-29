@@ -780,6 +780,41 @@ namespace TheFallenWastes_WebAPI.Controllers
             });
         }
 
+        [HttpPost("{id}/buildings/instant-finish")]
+        public async Task<IActionResult> InstantFinishBuilding(Guid id)
+        {
+            const int thresholdSeconds = 300; // 5 minutes
+
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (settlement == null)
+                return NotFound("Settlement not found.");
+
+            var building = settlement.Buildings
+                .Where(b => b.IsConstructing && b.GetRemainingSeconds() <= thresholdSeconds)
+                .OrderBy(b => b.ConstructionEndUtc)
+                .FirstOrDefault();
+
+            if (building == null)
+                return BadRequest("No building eligible for instant finish (requires \u2264 5 minutes remaining).");
+
+            building.ForceComplete();
+            settlement.RecalculateUsedPopulation();
+            await _db.SaveChangesAsync();
+
+            await StartNextQueuedConstructionsInternal(settlement);
+            await RecalculatePlayerScore(settlement.PlayerId);
+
+            return Ok(new
+            {
+                Message = "Construction completed instantly.",
+                BuildingType = building.Type.ToString(),
+                building.Level
+            });
+        }
+
         [HttpPost("{id}/commander/activate")]
         public async Task<IActionResult> ActivateCommander(Guid id, [FromBody] ActivateCommanderRequest? request)
         {
@@ -855,6 +890,21 @@ namespace TheFallenWastes_WebAPI.Controllers
 
                 foreach (var r in relations)
                     myRelations[r.TargetPlayerId] = r.Type.ToString().ToLower();
+
+                // Alliance members are always shown as ally on the map
+                var myMembership = await _db.AllianceMembers
+                    .FirstOrDefaultAsync(m => m.PlayerId == currentPlayerId);
+
+                if (myMembership != null)
+                {
+                    var allianceMembers = await _db.AllianceMembers
+                        .Where(m => m.AllianceId == myMembership.AllianceId && m.PlayerId != currentPlayerId)
+                        .Select(m => m.PlayerId)
+                        .ToListAsync();
+
+                    foreach (var memberId in allianceMembers)
+                        myRelations[memberId] = "ally";
+                }
             }
 
             var result = allSettlements.Select((s, index) =>
@@ -906,18 +956,27 @@ namespace TheFallenWastes_WebAPI.Controllers
             var player = await _db.Players.FindAsync(settlement.PlayerId);
             int queueLimit = player?.GetBuildQueueLimit() ?? 2;
 
+            var now2 = DateTime.UtcNow;
             var activeQueue = settlement.TrainingQueue
                 .Where(q => !q.IsCompleted)
                 .OrderBy(q => q.EndsAtUtc)
-                .Select(q => new
+                .Select(q =>
                 {
-                    q.Id,
-                    q.UnitName,
-                    q.Quantity,
-                    q.StartedAtUtc,
-                    q.EndsAtUtc,
-                    q.PopulationCostPerUnit,
-                    RemainingSeconds = q.GetRemainingSeconds()
+                    double totalSec = (q.EndsAtUtc - q.StartedAtUtc).TotalSeconds;
+                    int perUnit = Math.Max(1, (int)Math.Round(totalSec / q.Quantity));
+                    return new
+                    {
+                        q.Id,
+                        q.UnitName,
+                        q.Quantity,
+                        q.DeliveredQuantity,
+                        q.StartedAtUtc,
+                        q.EndsAtUtc,
+                        q.PopulationCostPerUnit,
+                        PerUnitDurationSeconds = perUnit,
+                        RemainingSeconds = q.GetRemainingSeconds(),
+                        TotalRemainingSeconds = q.GetTotalRemainingSeconds()
+                    };
                 })
                 .ToList();
 
@@ -1074,21 +1133,29 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (settlement.TrainingQueue == null || settlement.TrainingQueue.Count == 0)
                 return 0;
 
-            var readyItems = settlement.TrainingQueue
-                .Where(q => !q.IsCompleted && q.IsReadyToComplete())
-                .OrderBy(q => q.EndsAtUtc)
-                .ToList();
+            var now = DateTime.UtcNow;
+            int totalDelivered = 0;
 
-            int completedCount = 0;
-
-            foreach (var item in readyItems)
+            foreach (var item in settlement.TrainingQueue.Where(q => !q.IsCompleted))
             {
-                settlement.AddUnits(item.UnitName, item.Quantity, item.PopulationCostPerUnit);
-                item.MarkCompleted();
-                completedCount++;
+                double totalSeconds = (item.EndsAtUtc - item.StartedAtUtc).TotalSeconds;
+                int perUnit = Math.Max(1, (int)Math.Round(totalSeconds / item.Quantity));
+                double elapsed = (now - item.StartedAtUtc).TotalSeconds;
+                int unitsReady = Math.Min(item.Quantity, (int)(elapsed / perUnit));
+
+                int toDeliver = unitsReady - item.DeliveredQuantity;
+                if (toDeliver > 0)
+                {
+                    settlement.AddUnits(item.UnitName, toDeliver, item.PopulationCostPerUnit);
+                    item.DeliverUnits(toDeliver);
+                    totalDelivered += toDeliver;
+                }
+
+                if (item.DeliveredQuantity >= item.Quantity || now >= item.EndsAtUtc)
+                    item.MarkCompleted();
             }
 
-            return completedCount;
+            return totalDelivered;
         }
 
         private async Task StartNextQueuedConstructionsInternal(Settlement settlement)

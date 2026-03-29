@@ -89,6 +89,11 @@ export async function cancelBuilding(settlementId, buildingType, targetLevel) {
     return response.data
 }
 
+export async function instantFinishBuilding(settlementId) {
+    const response = await api.post(`/Settlements/${settlementId}/buildings/instant-finish`)
+    return response.data
+}
+
 export async function getWorldSettlements(seed, playerId) {
     const response = await api.get(`/Settlements/world/${seed}`, {
         headers: playerId ? { 'X-Player-Id': playerId } : {}
