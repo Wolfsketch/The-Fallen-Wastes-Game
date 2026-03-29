@@ -211,6 +211,64 @@ namespace TheFallenWastes_WebAPI.Controllers
             });
         }
 
+        // ── Rename settlement ──────────────────────────────────────────────
+        [HttpPatch("{id}/rename")]
+        public async Task<IActionResult> RenameSettlement(Guid id, [FromBody] RenameSettlementRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length < 3 || req.Name.Length > 40)
+                return BadRequest("Settlement name must be 3–40 characters.");
+
+            if (!Request.Headers.TryGetValue("X-Player-Id", out var pidHeader)
+                || !Guid.TryParse(pidHeader, out var playerId))
+                return BadRequest("X-Player-Id header required.");
+
+            var settlement = await _db.Settlements.FindAsync(id);
+            if (settlement == null) return NotFound("Settlement not found.");
+            if (settlement.PlayerId != playerId) return Forbid();
+
+            settlement.Rename(req.Name.Trim());
+            await _db.SaveChangesAsync();
+            return Ok(new { settlement.Id, settlement.Name });
+        }
+
+        // ── Found new settlement ───────────────────────────────────────────
+        [HttpPost("found")]
+        public async Task<IActionResult> FoundSettlement([FromBody] FoundSettlementRequest req)
+        {
+            var player = await _db.Players
+                .Include(p => p.Settlements)
+                .FirstOrDefaultAsync(p => p.Id == req.PlayerId);
+            if (player == null) return NotFound("Player not found.");
+
+            if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length < 3 || req.Name.Length > 40)
+                return BadRequest("Settlement name must be 3–40 characters.");
+
+            if (player.Settlements.Count >= player.MaxSettlements)
+            {
+                int needed = player.TriumphPointsForNextLevel;
+                return BadRequest(new
+                {
+                    error = "conquest_level_required",
+                    message = $"You need {needed - player.TriumphPoints} more Triumph Points to found another outpost.",
+                    currentLevel = player.ConquestLevel,
+                    triumphPoints = player.TriumphPoints,
+                    triumphPointsNeeded = needed
+                });
+            }
+
+            var newSettlement = new Settlement(req.Name.Trim(), player.Id);
+            player.AddSettlement(newSettlement);
+            _db.Settlements.Add(newSettlement);
+            EnsureStarterBuildings(newSettlement);
+            await _db.SaveChangesAsync();
+            await RecalculatePlayerScore(player.Id);
+
+            return Ok(new { newSettlement.Id, newSettlement.Name, Message = $"Outpost '{newSettlement.Name}' established." });
+        }
+
+        public record RenameSettlementRequest(string Name);
+        public record FoundSettlementRequest(Guid PlayerId, string Name);
+
         [HttpGet("{id}/queue")]
         public async Task<IActionResult> GetBuildQueue(Guid id)
         {

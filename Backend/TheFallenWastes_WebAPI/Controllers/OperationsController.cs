@@ -289,6 +289,19 @@ namespace TheFallenWastes_WebAPI.Controllers
                                         lootCollected
                                     }),
                                     messageType: "report"));
+
+                                // ── Score: POI raid attack score + TP ──
+                                if (attackerWins)
+                                {
+                                    int killed = npcLosses.Values.Sum();
+                                    if (killed > 0)
+                                    {
+                                        raidAttackerPlayer.SetAttackScore(raidAttackerPlayer.AttackScore + killed);
+                                        raidAttackerPlayer.AddTriumphPoints(killed);
+                                        _db.Entry(raidAttackerPlayer).Property(p => p.AttackScore).IsModified = true;
+                                        _db.Entry(raidAttackerPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                    }
+                                }
                             }
                         }
                     }
@@ -465,6 +478,30 @@ namespace TheFallenWastes_WebAPI.Controllers
                                     body: defBodyJson,
                                     messageType: "report"));
                             }
+
+                            // ── Score: settlement battle attack/defense + TP ──
+                            if (atkPlayer != null)
+                            {
+                                int atkKilled = defLosses.Values.Sum();
+                                if (atkWins && atkKilled > 0)
+                                {
+                                    atkPlayer.SetAttackScore(atkPlayer.AttackScore + atkKilled);
+                                    atkPlayer.AddTriumphPoints(atkKilled);
+                                    _db.Entry(atkPlayer).Property(p => p.AttackScore).IsModified = true;
+                                    _db.Entry(atkPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                }
+                            }
+                            if (defPlayer != null)
+                            {
+                                int defKilled = atkLosses.Values.Sum();
+                                if (!atkWins && defKilled > 0)
+                                {
+                                    defPlayer.SetDefenseScore(defPlayer.DefenseScore + defKilled);
+                                    defPlayer.AddTriumphPoints(defKilled);
+                                    _db.Entry(defPlayer).Property(p => p.DefenseScore).IsModified = true;
+                                    _db.Entry(defPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                }
+                            }
                         }
                     }
 
@@ -555,6 +592,10 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 wins2 ? $"\u26a0 Your settlement was raided by {atkSett2.Name}" : $"\u2713 Attack repelled from {atkSett2.Name}",
                                 JsonSerializer.Serialize(new { isSettlementBattleReport = true, isDefenseReport = true, attackerWins = wins2, attackerSentUnits = sent2, attackerLosses = aLoss2, attackerSurvived = surv2, defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2, lootedResources = loot2, attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name }),
                                 "report"));
+
+                        // ── Score: orphaned battle ──
+                        if (ap2 != null) { int k2 = dLoss2.Values.Sum(); if (wins2 && k2 > 0) { ap2.SetAttackScore(ap2.AttackScore + k2); ap2.AddTriumphPoints(k2); _db.Entry(ap2).Property(p => p.AttackScore).IsModified = true; _db.Entry(ap2).Property(p => p.TriumphPoints).IsModified = true; } }
+                        if (dp2 != null) { int k2d = aLoss2.Values.Sum(); if (!wins2 && k2d > 0) { dp2.SetDefenseScore(dp2.DefenseScore + k2d); dp2.AddTriumphPoints(k2d); _db.Entry(dp2).Property(p => p.DefenseScore).IsModified = true; _db.Entry(dp2).Property(p => p.TriumphPoints).IsModified = true; } }
                     }
                     int retSecs2 = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                     op.MarkReturning(retSecs2);
@@ -563,7 +604,6 @@ namespace TheFallenWastes_WebAPI.Controllers
                 {
                     // Settlement attack return: restore surviving units + loot to attacker
                     if (op.OperationType == "attack_settlement"
-                        && op.AttackerSettlementId == settlementId
                         && !string.IsNullOrEmpty(op.ResultJson))
                     {
                         var homeSett = await _db.Settlements

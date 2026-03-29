@@ -2,56 +2,152 @@
   <div class="fade-in">
     <div class="page-header">
       <h2 class="page-title">CAMP</h2>
-      <span class="page-subtitle">CAMP OVERVIEW</span>
+      <span class="page-subtitle">COMMAND OVERVIEW</span>
     </div>
     <div class="accent-line" style="margin-bottom: 20px;" />
 
+    <!-- Row 1: Settlement Info + Operational Status -->
     <div class="camp-grid">
-      <!-- Threat Assessment -->
+      <!-- Settlement info + rename -->
       <div class="panel">
         <div class="panel-accent" />
         <div class="panel-body">
-          <div class="panel-title">
-            <span class="panel-dot" />
-            THREAT ASSESSMENT
+          <div class="panel-title"><span class="panel-dot" /> OUTPOST STATUS</div>
+
+          <div class="settle-name-row">
+            <span v-if="!renaming" class="settle-name">{{ settlement?.name }}</span>
+            <input v-else ref="renameInput" v-model="renameValue" class="rename-input"
+              maxlength="40" @keyup.enter="submitRename" @keyup.escape="renaming=false" />
+            <button v-if="!renaming" class="rename-btn" @click="startRename" title="Rename settlement">✏</button>
+            <div v-else class="rename-actions">
+              <button class="rename-confirm" @click="submitRename">✓</button>
+              <button class="rename-cancel" @click="renaming=false">✕</button>
+            </div>
           </div>
-          <div class="intel-list">
-            <div v-for="(item, i) in intel" :key="i" class="intel-item">
-              <span class="tag" :class="'tag--' + item.type">{{ item.tag }}</span>
-              <span :style="{ color: item.color }">{{ item.msg }}</span>
+          <div v-if="renameError" class="rename-error">{{ renameError }}</div>
+
+          <div class="settle-meta-grid">
+            <div class="settle-meta-item">
+              <div class="smilabel">POPULATION</div>
+              <div class="smivalue">{{ settlement?.usedPopulation ?? '—' }} / {{ settlement?.populationCapacity ?? '—' }}</div>
+            </div>
+            <div class="settle-meta-item">
+              <div class="smilabel">FREE POP</div>
+              <div class="smivalue" :style="{color: (settlement?.availablePopulation ?? 0) < 10 ? 'var(--amber)' : 'var(--text)'}">
+                {{ settlement?.availablePopulation ?? '—' }}
+              </div>
+            </div>
+            <div class="settle-meta-item">
+              <div class="smilabel">WATER</div>
+              <div class="smivalue" :style="{color: (settlement?.water ?? 999) < 200 ? 'var(--red)' : 'var(--text)'}">
+                {{ settlement?.water ?? '—' }}
+              </div>
+            </div>
+            <div class="settle-meta-item">
+              <div class="smilabel">MORALE</div>
+              <div class="smivalue" :style="{color: moralColor}">{{ settlement?.morale ?? '—' }}%</div>
+            </div>
+            <div class="settle-meta-item">
+              <div class="smilabel">BUILDINGS</div>
+              <div class="smivalue">{{ settlement?.buildingCount ?? '—' }}</div>
+            </div>
+            <div class="settle-meta-item">
+              <div class="smilabel">UNITS</div>
+              <div class="smivalue">{{ totalUnits }}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Operational Status -->
+      <!-- Military / score status -->
       <div class="panel">
         <div class="panel-accent" />
         <div class="panel-body">
-          <div class="panel-title">
-            <span class="panel-dot" />
-            OPERATIONAL STATUS
-          </div>
+          <div class="panel-title"><span class="panel-dot" /> OPERATIONAL STATUS</div>
           <div class="stats-grid">
-            <div v-for="stat in stats" :key="stat.label" class="stat-item">
-              <div class="stat-label">{{ stat.label }}</div>
-              <div class="stat-value" :style="{ color: stat.color }">{{ stat.value }}</div>
+            <div class="stat-item">
+              <div class="stat-label">Score</div>
+              <div class="stat-value" style="color:var(--cyan)">{{ player?.score ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Attack Score</div>
+              <div class="stat-value" style="color:var(--orange, #ff9040)">{{ player?.attackScore ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Defense Score</div>
+              <div class="stat-value" style="color:var(--green)">{{ player?.defenseScore ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">War Score</div>
+              <div class="stat-value" style="color:var(--amber)">{{ player?.warScore ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Triumph Points</div>
+              <div class="stat-value" style="color:#d4af37">{{ player?.triumphPoints ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Settlements</div>
+              <div class="stat-value" style="color:var(--text)">{{ player?.settlements?.length ?? 1 }} / {{ player?.maxSettlements ?? 1 }}</div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Activity Log -->
-    <div class="panel" style="margin-top: 14px;">
+    <!-- Row 2: Conquest Progress -->
+    <div class="panel" style="margin-top:14px">
       <div class="panel-accent" />
       <div class="panel-body">
-        <div class="panel-title">
-          <span class="panel-dot" />
-          OPERATIONS LOG
+        <div class="panel-title"><span class="panel-dot" style="background:#d4af37;box-shadow:0 0 6px #d4af37" /> CONQUEST — EXPANSION LEVEL {{ player?.conquestLevel ?? 1 }}</div>
+        <div class="conquest-row">
+          <div class="conquest-info">
+            <div class="conquest-desc">
+              Earn <strong>Triumph Points</strong> by winning battles. Each conquest level unlocks a new outpost slot.
+            </div>
+            <div class="conquest-tp">
+              <span class="tp-current">{{ player?.triumphPoints ?? 0 }}</span>
+              <span class="tp-sep"> / </span>
+              <span class="tp-needed">{{ player?.triumphPointsForNextLevel ?? 3 }}</span>
+              <span class="tp-label"> TP</span>
+            </div>
+          </div>
+          <div class="conquest-bar-wrap">
+            <div class="conquest-bar">
+              <div class="conquest-fill" :style="{width: conquestPercent + '%'}" />
+            </div>
+            <div class="conquest-sublabel">→ Level {{ (player?.conquestLevel ?? 1) + 1 }} unlocks outpost {{ (player?.conquestLevel ?? 1) + 1 }}</div>
+          </div>
         </div>
-        <div class="log-list">
-          <div v-for="(entry, i) in log" :key="i" class="log-entry">
+        <div class="conquest-level-list">
+          <div v-for="lvl in 6" :key="lvl" class="conquest-level-badge"
+            :class="{ 'clb--achieved': (player?.conquestLevel ?? 1) >= lvl }">
+            <span class="clb-lvl">L{{ lvl }}</span>
+            <span class="clb-tp">{{ conquestTpRequired(lvl) }} TP</span>
+            <span class="clb-unlock">{{ lvl }} outpost{{ lvl !== 1 ? 's' : '' }}</span>
+          </div>
+        </div>
+        <div v-if="canFoundNewSettlement" class="found-settlement-section">
+          <div class="found-ready">🏗 CONQUEST LEVEL {{ player?.conquestLevel }} — New outpost slot available!</div>
+          <div class="found-form">
+            <input v-model="foundName" class="found-input" placeholder="Enter outpost name..." maxlength="40" />
+            <button class="found-btn" :disabled="founding" @click="submitFoundSettlement">
+              {{ founding ? 'ESTABLISHING...' : '+ FOUND OUTPOST' }}
+            </button>
+          </div>
+          <div v-if="foundError" class="found-error">{{ foundError }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Operations Log -->
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-accent" />
+      <div class="panel-body">
+        <div class="panel-title"><span class="panel-dot" /> OPERATIONS LOG</div>
+        <div v-if="logLoading" class="log-empty">Loading...</div>
+        <div v-else-if="logEntries.length === 0" class="log-empty">No activity recorded yet.</div>
+        <div v-else class="log-list">
+          <div v-for="(entry, i) in logEntries" :key="i" class="log-entry">
             <span class="log-time">{{ entry.time }}</span>
             <span class="tag" :class="'tag--' + entry.type">{{ entry.tag }}</span>
             <span class="log-msg" :style="{ color: entry.color }">{{ entry.msg }}</span>
@@ -63,162 +159,241 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { renameSettlement, foundSettlement, getPlayerReports, getPlayerById } from '../services/api.js'
 
 const props = defineProps({
   player: Object,
-  settlement: Object
+  settlement: Object,
+  refreshSettlement: Function
 })
 
-const intel = computed(() => [
-  { msg: 'No hostile activity detected', color: 'var(--green)', tag: 'ALL CLEAR', type: 'green' },
-  { msg: `Population: ${props.settlement?.population}/${props.settlement?.populationCapacity}`, color: 'var(--amber)', tag: 'INFO', type: 'amber' },
-  { msg: `Water reserves: ${props.settlement?.water}`, color: props.settlement?.water < 200 ? 'var(--red)' : 'var(--text)', tag: props.settlement?.water < 200 ? 'WARNING' : 'OK', type: props.settlement?.water < 200 ? 'red' : 'cyan' },
-  { msg: `${props.settlement?.availablePopulation} personnel unassigned`, color: 'var(--muted)', tag: 'INFO', type: 'muted' },
-])
+// ── Rename ──────────────────────────────────────────────────
+const renaming = ref(false)
+const renameValue = ref('')
+const renameInput = ref(null)
+const renameError = ref('')
 
-const stats = computed(() => [
-  { label: 'Personnel',    value: `${props.settlement?.population}/${props.settlement?.populationCapacity}`, color: 'var(--cyan)' },
-  { label: 'Idle',          value: props.settlement?.availablePopulation,  color: 'var(--amber)' },
-  { label: 'Facilities',    value: '0', color: 'var(--cyan)' },
-  { label: 'Defense Rating', value: '0', color: 'var(--green)' },
-  { label: 'Strike Power',  value: '0', color: 'var(--cyan)' },
-  { label: 'Reputation',    value: props.player?.score, color: 'var(--muted)' },
-])
+function startRename() {
+  renameValue.value = props.settlement?.name ?? ''
+  renameError.value = ''
+  renaming.value = true
+  nextTick(() => renameInput.value?.focus())
+}
 
-const log = computed(() => [
-  { time: new Date(props.player?.createdAtUtc).toLocaleTimeString('en-GB'),
-    msg: `Outpost "${props.settlement?.name}" established`, tag: 'NEW', type: 'cyan',
-    color: 'var(--bright)' },
-  { time: new Date(props.player?.createdAtUtc).toLocaleTimeString('en-GB'),
-    msg: `Operator ${props.player?.username} authenticated`, tag: 'AUTH', type: 'muted',
-    color: 'var(--text)' },
-])
+async function submitRename() {
+  renameError.value = ''
+  const name = renameValue.value.trim()
+  if (name.length < 3) { renameError.value = 'Name must be at least 3 characters.'; return }
+  try {
+    await renameSettlement(props.settlement.id, name, props.player.id)
+    renaming.value = false
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (e) {
+    renameError.value = e?.response?.data || 'Could not rename.'
+  }
+}
+
+// ── Found new settlement ─────────────────────────────────────
+const foundName = ref('')
+const foundError = ref('')
+const founding = ref(false)
+
+const canFoundNewSettlement = computed(() =>
+  (props.player?.settlements?.length ?? 1) < (props.player?.maxSettlements ?? 1)
+)
+
+async function submitFoundSettlement() {
+  foundError.value = ''
+  const name = foundName.value.trim()
+  if (name.length < 3) { foundError.value = 'Name must be at least 3 characters.'; return }
+  founding.value = true
+  try {
+    await foundSettlement(props.player.id, name)
+    foundName.value = ''
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.response?.data || 'Could not found outpost.'
+    foundError.value = typeof msg === 'string' ? msg : JSON.stringify(msg)
+  } finally {
+    founding.value = false
+  }
+}
+
+// ── Computed helpers ─────────────────────────────────────────
+const moralColor = computed(() => {
+  const m = props.settlement?.morale ?? 100
+  if (m >= 70) return 'var(--green)'
+  if (m >= 40) return 'var(--amber)'
+  return 'var(--red)'
+})
+
+const totalUnits = computed(() => {
+  const inv = props.settlement?.unitInventory
+  if (!inv) return 0
+  return Object.values(inv).reduce((s, v) => s + v, 0)
+})
+
+const conquestPercent = computed(() => {
+  const tp = props.player?.triumphPoints ?? 0
+  const needed = props.player?.triumphPointsForNextLevel ?? 3
+  if (needed <= 0) return 100
+  const prevNeeded = conquestTpRequired(props.player?.conquestLevel ?? 1)
+  const range = needed - prevNeeded
+  if (range <= 0) return 100
+  return Math.min(100, Math.max(0, Math.round(((tp - prevNeeded) / range) * 100)))
+})
+
+function conquestTpRequired(level) {
+  if (level <= 1) return 0
+  return Math.round(1.5 * (level - 1) * level)
+}
+
+// ── Operations log ────────────────────────────────────────────
+const logEntries = ref([])
+const logLoading = ref(true)
+
+function parseLogEntry(msg) {
+  const time = new Date(msg.sentAtUtc).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const date = new Date(msg.sentAtUtc).toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit' })
+  const label = `${date} ${time}`
+
+  // Try to parse JSON body
+  let body = null
+  try { body = JSON.parse(msg.body) } catch { /* ignore */ }
+
+  if (body?.isSettlementBattleReport) {
+    const won = body.attackerWins
+    const isDefense = body.isDefenseReport
+    const other = isDefense ? (body.attackerSettlementName ?? 'enemy') : (body.defenderSettlementName ?? 'target')
+    if (isDefense) {
+      return { time: label, tag: won ? 'DEFEAT' : 'REPELLED', type: won ? 'red' : 'cyan',
+        msg: won ? `Settlement raided by ${other}` : `Attack repelled from ${other}`, color: won ? 'var(--red)' : 'var(--green)' }
+    } else {
+      return { time: label, tag: won ? 'VICTORY' : 'DEFEAT', type: won ? 'cyan' : 'red',
+        msg: won ? `Raid victory on ${other}` : `Attack failed on ${other}`, color: won ? 'var(--green)' : 'var(--red)' }
+    }
+  }
+  if (body?.isScoutReport) {
+    return { time: label, tag: 'SCOUT', type: 'muted',
+      msg: `Scouted ${body.poiName ?? 'POI'} — Tier ${body.tier ?? '?'}`, color: 'var(--text)' }
+  }
+  if (body?.attackerWins !== undefined) {
+    const won = body.attackerWins
+    return { time: label, tag: won ? 'RAID' : 'FAIL', type: won ? 'cyan' : 'red',
+      msg: `Battle at ${body.poiName ?? 'POI'} — ${won ? 'Victory' : 'Defeated'}`, color: won ? 'var(--green)' : 'var(--red)' }
+  }
+
+  return { time: label, tag: 'MSG', type: 'muted', msg: msg.subject ?? '—', color: 'var(--text)' }
+}
+
+async function loadLog() {
+  logLoading.value = true
+  try {
+    const reports = await getPlayerReports(props.player?.id)
+    const entries = (reports ?? [])
+      .slice(0, 30)
+      .map(parseLogEntry)
+
+    // Always add account creation entry at the bottom
+    const created = props.player?.createdAtUtc
+    if (created) {
+      const t = new Date(created)
+      const label = `${t.toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit' })} ${t.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })}`
+      entries.push({ time: label, tag: 'AUTH', type: 'muted',
+        msg: `Operator ${props.player?.username} authenticated`, color: 'var(--muted)' })
+      entries.push({ time: label, tag: 'NEW', type: 'cyan',
+        msg: `Outpost "${props.settlement?.name}" established`, color: 'var(--bright)' })
+    }
+
+    logEntries.value = entries
+  } catch {
+    logEntries.value = []
+  } finally {
+    logLoading.value = false
+  }
+}
+
+onMounted(() => {
+  if (props.player?.id) loadLog()
+})
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-.page-title {
-  font-family: var(--ff-title);
-  font-size: 16px;
-  color: var(--cyan);
-  letter-spacing: 3px;
-  font-weight: 700;
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.12);
-  text-transform: uppercase;
-}
-.page-subtitle {
-  font-size: 8px;
-  color: var(--cyan-dim);
-  letter-spacing: 2px;
-  font-family: var(--ff-title);
-}
+.page-header { display:flex;align-items:baseline;gap:12px;margin-bottom:4px }
+.page-title { font-family:var(--ff-title);font-size:16px;color:var(--cyan);letter-spacing:3px;font-weight:700;text-shadow:0 0 10px rgba(0,212,255,.12);text-transform:uppercase }
+.page-subtitle { font-size:8px;color:var(--cyan-dim);letter-spacing:2px;font-family:var(--ff-title) }
 
-.camp-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
+.camp-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px }
 
-/* Panel */
-.panel {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  position: relative;
-  overflow: hidden;
-}
-.panel-accent {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--cyan), transparent);
-  opacity: 0.4;
-}
-.panel-body {
-  padding: 20px;
-}
-.panel-title {
-  font-size: 9px;
-  color: var(--cyan);
-  text-transform: uppercase;
-  letter-spacing: 3px;
-  font-weight: 700;
-  font-family: var(--ff-title);
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.panel-dot {
-  width: 6px;
-  height: 6px;
-  background: var(--cyan);
-  box-shadow: 0 0 6px var(--cyan);
-  display: inline-block;
-}
+.panel { background:var(--bg2);border:1px solid var(--border);position:relative;overflow:hidden }
+.panel-accent { position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--cyan),transparent);opacity:.4 }
+.panel-body { padding:20px }
+.panel-title { font-size:9px;color:var(--cyan);text-transform:uppercase;letter-spacing:3px;font-weight:700;font-family:var(--ff-title);margin-bottom:14px;display:flex;align-items:center;gap:8px }
+.panel-dot { width:6px;height:6px;background:var(--cyan);box-shadow:0 0 6px var(--cyan);display:inline-block;flex-shrink:0 }
 
-/* Intel */
-.intel-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.intel-item {
-  font-size: 11px;
-  line-height: 2.4;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Settlement name + rename */
+.settle-name-row { display:flex;align-items:center;gap:8px;margin-bottom:14px }
+.settle-name { font-family:var(--ff-title);font-size:15px;color:var(--bright);font-weight:700;letter-spacing:1px }
+.rename-input { background:rgba(0,212,255,.07);border:1px solid var(--cyan);color:var(--bright);font-family:var(--ff-title);font-size:14px;padding:3px 8px;flex:1;min-width:0;outline:none }
+.rename-btn { background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;transition:color .15s }
+.rename-btn:hover { color:var(--cyan) }
+.rename-actions { display:flex;gap:4px }
+.rename-confirm,.rename-cancel { background:none;border:1px solid;cursor:pointer;padding:2px 8px;font-size:11px }
+.rename-confirm { border-color:var(--green);color:var(--green) }
+.rename-cancel { border-color:var(--muted);color:var(--muted) }
+.rename-error { font-size:10px;color:var(--red);margin:-10px 0 10px }
+
+.settle-meta-grid { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px }
+.settle-meta-item { background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.08);padding:8px 10px }
+.smilabel { font-size:7px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px }
+.smivalue { font-family:var(--ff-title);font-size:14px;color:var(--text);font-weight:700 }
 
 /* Stats */
-.stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.stat-label {
-  font-size: 8px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  font-weight: 700;
-}
-.stat-value {
-  font-size: 18px;
-  font-family: var(--ff-title);
-  font-weight: 700;
-  letter-spacing: 1px;
-}
+.stats-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px }
+.stat-item { padding:8px 0 }
+.stat-label { font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:700 }
+.stat-value { font-size:18px;font-family:var(--ff-title);font-weight:700;letter-spacing:1px }
+
+/* Conquest */
+.conquest-row { display:flex;gap:24px;align-items:flex-start;margin-bottom:14px }
+.conquest-info { flex:1;min-width:0 }
+.conquest-desc { font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6 }
+.conquest-desc strong { color:var(--text) }
+.conquest-tp { font-family:var(--ff-title);font-size:16px;color:var(--text) }
+.tp-current { color:#d4af37;font-size:22px }
+.tp-sep,.tp-label { color:var(--muted) }
+.tp-needed { color:var(--text) }
+.conquest-bar-wrap { flex:1;min-width:0 }
+.conquest-bar { height:6px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.15);margin-bottom:6px }
+.conquest-fill { height:100%;background:linear-gradient(90deg,#d4af37,#ffd700);transition:width .4s ease }
+.conquest-sublabel { font-size:9px;color:var(--muted);letter-spacing:1px }
+.conquest-level-list { display:flex;gap:8px;flex-wrap:wrap;margin-top:4px }
+.conquest-level-badge { display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid rgba(0,212,255,.12);background:rgba(0,212,255,.03);min-width:60px;opacity:.5;transition:opacity .2s }
+.clb--achieved { border-color:rgba(212,175,55,.4);background:rgba(212,175,55,.06);opacity:1 }
+.clb-lvl { font-family:var(--ff-title);font-size:10px;color:#d4af37;font-weight:700 }
+.clb-tp { font-size:9px;color:var(--muted);margin-top:2px }
+.clb-unlock { font-size:8px;color:var(--text);margin-top:2px }
+.found-settlement-section { margin-top:16px;padding:12px 14px;border:1px solid rgba(212,175,55,.3);background:rgba(212,175,55,.04) }
+.found-ready { font-size:10px;color:#d4af37;letter-spacing:2px;font-family:var(--ff-title);margin-bottom:10px }
+.found-form { display:flex;gap:8px }
+.found-input { flex:1;background:rgba(0,212,255,.06);border:1px solid var(--border-bright);color:var(--bright);font-size:12px;padding:6px 10px;outline:none }
+.found-btn { background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.5);color:#d4af37;font-family:var(--ff-title);font-size:9px;letter-spacing:1.5px;padding:6px 14px;cursor:pointer;font-weight:700 }
+.found-btn:disabled { opacity:.5;cursor:default }
+.found-error { font-size:10px;color:var(--red);margin-top:6px }
 
 /* Log */
-.log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.log-entry {
-  font-size: 10px;
-  line-height: 2.6;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.log-time {
-  font-family: var(--ff-title);
-  font-size: 9px;
-  color: var(--cyan-dim);
-  letter-spacing: 1px;
-  min-width: 70px;
-}
-.log-msg {
-  color: var(--text);
-}
+.log-list { display:flex;flex-direction:column;gap:2px }
+.log-empty { font-size:11px;color:var(--muted);padding:4px 0 }
+.log-entry { font-size:10px;line-height:2.6;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,212,255,.04) }
+.log-time { font-family:var(--ff-title);font-size:9px;color:var(--cyan-dim);letter-spacing:1px;min-width:82px }
+.log-msg { color:var(--text) }
+
+/* Tags */
+.tag { font-family:var(--ff-title);font-size:7px;letter-spacing:1px;padding:2px 5px;font-weight:700;border:1px solid }
+.tag--cyan { color:var(--cyan);border-color:rgba(0,212,255,.3);background:rgba(0,212,255,.06) }
+.tag--green { color:var(--green);border-color:rgba(0,255,120,.3);background:rgba(0,255,120,.06) }
+.tag--amber { color:var(--amber);border-color:rgba(255,184,0,.3);background:rgba(255,184,0,.06) }
+.tag--red { color:var(--red);border-color:rgba(255,60,60,.3);background:rgba(255,60,60,.06) }
+.tag--muted { color:var(--muted);border-color:rgba(150,150,150,.2);background:rgba(150,150,150,.04) }
 </style>

@@ -385,10 +385,14 @@ namespace TheFallenWastes_WebAPI.Controllers
                 player.AttackScore,
                 player.DefenseScore,
                 WarScore = player.WarScore,
+                player.TriumphPoints,
+                ConquestLevel = player.ConquestLevel,
+                MaxSettlements = player.MaxSettlements,
+                TriumphPointsForNextLevel = player.TriumphPointsForNextLevel,
                 player.DataVersion,
                 WasMigrated = wasMigrated,
                 Advisors = MapAdvisors(player),
-                csharpSettlements = includeSettlements
+                Settlements = includeSettlements
                 ? player.Settlements.Select(s => new
                 {
                     s.Id,

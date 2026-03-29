@@ -16,8 +16,19 @@ namespace TheFallenWastes_Domain.Entities
         public int Score { get; private set; }
         public int AttackScore { get; private set; }
         public int DefenseScore { get; private set; }
+        public int TriumphPoints { get; private set; }
 
         public int WarScore => AttackScore + DefenseScore;
+
+        /// Conquest level derived from TriumphPoints. Level L costs (3/2)*(L-1)*L total TP.
+        /// L=1:0 | L=2:3 | L=3:9 | L=4:18 | L=5:30
+        public int ConquestLevel => ComputeConquestLevel(TriumphPoints);
+
+        /// How many settlements this player may own (= ConquestLevel).
+        public int MaxSettlements => ConquestLevel;
+
+        /// Total TP needed to reach the next conquest level.
+        public int TriumphPointsForNextLevel => (int)(1.5 * ConquestLevel * (ConquestLevel + 1));
 
         public bool CommanderActive { get; private set; }
         public DateTime? CommanderExpiresUtc { get; private set; }
@@ -326,12 +337,25 @@ namespace TheFallenWastes_Domain.Entities
             DefenseScore = defenseScore;
         }
 
+        public void AddTriumphPoints(int amount)
+        {
+            if (amount > 0) TriumphPoints += amount;
+        }
+
         public void AddSettlement(Settlement settlement)
         {
             if (settlement == null)
                 throw new ArgumentNullException(nameof(settlement));
 
             Settlements.Add(settlement);
+        }
+
+        private static int ComputeConquestLevel(int tp)
+        {
+            // totalTP(L) = (3/2)*(L-1)*L => L = (1 + sqrt(1 + 8*tp/3)) / 2
+            if (tp <= 0) return 1;
+            double L = (1.0 + Math.Sqrt(1.0 + 8.0 * tp / 3.0)) / 2.0;
+            return Math.Max(1, (int)Math.Floor(L));
         }
 
         public void SetDataVersion(int version)

@@ -421,6 +421,13 @@ function setPlayerData(data) {
     createdAtUtc: data.createdAtUtc,
     isActive: data.isActive,
     score: data.score,
+    attackScore: data.attackScore ?? 0,
+    defenseScore: data.defenseScore ?? 0,
+    warScore: data.warScore ?? 0,
+    triumphPoints: data.triumphPoints ?? 0,
+    conquestLevel: data.conquestLevel ?? 1,
+    maxSettlements: data.maxSettlements ?? 1,
+    triumphPointsForNextLevel: data.triumphPointsForNextLevel ?? 3,
     advisors: {
       commander: data.advisors?.commander ?? { active: false, expiresUtc: null },
       quartermaster: data.advisors?.quartermaster ?? { active: false, expiresUtc: null },
@@ -430,7 +437,7 @@ function setPlayerData(data) {
     }
   }
 
-  const settlements = data.csharpSettlements ?? (data.settlement ? [data.settlement] : [])
+  const settlements = data.settlements ?? data.csharpSettlements ?? (data.settlement ? [data.settlement] : [])
   allSettlements.value = settlements
 
   const storedId = sessionStorage.getItem('settlementId')

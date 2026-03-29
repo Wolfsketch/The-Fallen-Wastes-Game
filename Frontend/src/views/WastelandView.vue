@@ -25,13 +25,18 @@
             </div>
 
             <div class="movements-list">
-              <!-- INKOMENDE AANVALLEN -->
+              <!-- INCOMING ATTACKS -->
               <template v-if="incomingOps.length > 0">
-                <div class="movements-section-title movements-section-title--incoming">⚠ INKOMENDE AANVAL</div>
+                <div class="movements-section-title movements-section-title--incoming">
+                  <span>⚠ INCOMING ATTACK</span>
+                  <button class="overlay-mute-btn" @click.stop="toggleOverlayMute" :title="overlayMuted ? 'Enable alert overlay' : 'Dismiss alert overlay'">
+                    {{ overlayMuted ? '🔔' : '🔕' }}
+                  </button>
+                </div>
                 <div v-for="op in incomingOps" :key="'inc-'+op.id" class="movement-row movement-row--incoming" @click="focusOperation(op)">
                   <div class="movement-icon">💀</div>
                   <div class="movement-info">
-                    <div class="movement-target" style="color:#ff5050">{{ op.playerName ?? 'Onbekend' }}</div>
+                    <div class="movement-target" style="color:#ff5050">{{ op.playerName ?? 'Unknown' }}</div>
                     <div class="movement-units">{{ op.unitSummary ?? '?' }}</div>
                   </div>
                   <div class="movement-right">
@@ -47,9 +52,9 @@
                 </div>
               </template>
 
-              <!-- ONDERWEG -->
+              <!-- EN ROUTE -->
               <template v-if="allMovements.filter(o => o.phase === 'outbound').length > 0">
-                <div class="movements-section-title">ONDERWEG →</div>
+                <div class="movements-section-title">EN ROUTE →</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'outbound')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">
@@ -68,9 +73,9 @@
                 </div>
               </template>
 
-              <!-- AANWEZIG (enkel troepen, geen scouts) -->
+              <!-- PRESENT (troops only, no scouts) -->
               <template v-if="allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout')).length > 0">
-                <div class="movements-section-title">AANWEZIG ●</div>
+                <div class="movements-section-title">PRESENT ●</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout'))"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">{{ op.operationType === 'reinforce_poi' ? '⛊' : '⚔' }}</div>
@@ -80,14 +85,14 @@
                   </div>
                   <div class="movement-right">
                     <div class="movement-status status--arrived">●</div>
-                    <div class="movement-time" style="color:var(--green)">ACTIEF</div>
+                    <div class="movement-time" style="color:var(--green)">ACTIVE</div>
                   </div>
                 </div>
               </template>
 
-              <!-- TERUGKEREND -->
+              <!-- RETURNING -->
               <template v-if="allMovements.filter(o => o.phase === 'returning').length > 0">
-                <div class="movements-section-title">TERUG ←</div>
+                <div class="movements-section-title">RETURNING ←</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'returning')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">{{ op.operationType?.includes('scout') ? '👁' : '⚔' }}</div>
@@ -635,7 +640,7 @@ const frameTime = ref(Date.now())
 let frameInterval = null
 const operations = ref([])
 
-// Glow enkel wanneer iemand AANWEZIG is (phase === 'arrived')
+// Glow only when troops are PRESENT at a POI (phase === 'arrived')
 const arrivedPoiIds = computed(() =>
   new Set(
     operations.value
@@ -757,9 +762,18 @@ const isUnderAttack = computed(() =>
   incomingOps.value.some(op => op.phase === 'outbound')
 )
 
+const overlayMuted = ref(false)
+
 watch(isUnderAttack, val => {
-  window.dispatchEvent(new CustomEvent('under-attack-changed', { detail: { underAttack: val } }))
+  // When no longer under attack, reset mute so the overlay shows again next time
+  if (!val) overlayMuted.value = false
+  window.dispatchEvent(new CustomEvent('under-attack-changed', { detail: { underAttack: val && !overlayMuted.value } }))
 }, { immediate: true })
+
+function toggleOverlayMute() {
+  overlayMuted.value = !overlayMuted.value
+  window.dispatchEvent(new CustomEvent('under-attack-changed', { detail: { underAttack: isUnderAttack.value && !overlayMuted.value } }))
+}
 
 // Alliantieleden aanwezig in POI — zichtbaar in panel met naam + troepen
 function allianceAtPoi(poiId) {
@@ -1208,7 +1222,7 @@ async function confirmAttack() {
       operations.value.push({
         id: 'local-attack-' + Date.now(),
         phase: 'outbound',
-        operationType: _wasReinforce ? 'reinforce_poi' : 'raid_poi',
+        operationType: _type === 'settlement' ? 'attack_settlement' : (_wasReinforce ? 'reinforce_poi' : 'raid_poi'),
         originX: ownSlotA.x, originY: ownSlotA.y,
         destX, destY,
         startTime: Date.now(),
@@ -1299,15 +1313,18 @@ const troopOperations = computed(() =>
 )
 
 // Includes local ops (recent dispatches not yet confirmed by backend)
+function opKey(op) {
+  return op.operationType === 'attack_settlement'
+    ? `${op.targetSettlementId}|attack_settlement`
+    : `${op.poiId}|${op.operationType}`
+}
 const allMovements = computed(() => {
-  const backendPoiOps = new Set(
-    activeOperations.value.map(o => o.poiId + '|' + o.operationType)
-  )
+  const backendOps = new Set(activeOperations.value.map(opKey))
   const localOps = operations.value.filter(op =>
     op.isOwn &&
     op.phase === 'outbound' &&
     String(op.id).startsWith('local-') &&
-    !backendPoiOps.has(op.poiId + '|' + op.operationType)
+    !backendOps.has(opKey(op))
   )
   return [...activeOperations.value, ...localOps]
     .sort((a, b) => {
@@ -1957,7 +1974,9 @@ onUnmounted(() => {
 .movements-panel{position:absolute;top:calc(100% + 8px);right:0;width:320px;background:var(--bg2);border:1px solid var(--border-bright);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:200;display:flex;flex-direction:column;max-height:420px}
 .movements-list{overflow-y:auto;flex:1;max-height:340px}
 .movements-section-title{padding:6px 14px;font-size:8px;color:var(--cyan);letter-spacing:2px;font-family:var(--ff-title);font-weight:700;background:rgba(0,212,255,.04);border-bottom:1px solid var(--border);border-top:1px solid var(--border)}
-.movements-section-title--incoming{color:#ff5050;background:rgba(255,40,40,.07);border-color:rgba(255,40,40,.25)}
+.movements-section-title--incoming{color:#ff5050;background:rgba(255,40,40,.07);border-color:rgba(255,40,40,.25);display:flex;align-items:center;justify-content:space-between}
+.overlay-mute-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;opacity:.7;transition:opacity .15s}
+.overlay-mute-btn:hover{opacity:1}
 .movement-row--incoming{background:rgba(255,40,40,.04);border-bottom-color:rgba(255,40,40,.15)}
 .movement-row--incoming:hover{background:rgba(255,40,40,.09)}
 .movements-incoming-badge{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;border-radius:7px;background:#ff3030;color:#fff;font-size:9px;font-family:var(--ff-title);font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}

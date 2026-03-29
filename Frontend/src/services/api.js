@@ -279,6 +279,24 @@ export async function deleteMessage(messageId, playerId) {
     return response.data
 }
 
+// ── Settlement rename + founding ─────────────────────────────
+export async function renameSettlement(settlementId, name, playerId) {
+    const response = await api.patch(`/Settlements/${settlementId}/rename`, { name }, {
+        headers: { 'X-Player-Id': playerId }
+    })
+    return response.data
+}
+
+export async function foundSettlement(playerId, name) {
+    const response = await api.post('/Settlements/found', { playerId, name })
+    return response.data
+}
+
+export async function getPlayerReports(playerId) {
+    const response = await api.get(`/messages/${playerId}/reports`)
+    return response.data
+}
+
 // Reports
 export async function getReportMessages(playerId) {
     const response = await api.get(`/Messages/${playerId}/reports`)
