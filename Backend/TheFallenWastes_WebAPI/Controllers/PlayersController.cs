@@ -219,6 +219,36 @@ namespace TheFallenWastes_WebAPI.Controllers
         }
 
         // ════════════════════════════════════════════
+        // TRIUMPH (WAR RAID) ENDPOINT
+        // ════════════════════════════════════════════
+
+        [HttpPost("{id}/triumph")]
+        public async Task<IActionResult> OrganizeTriumph(Guid id)
+        {
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == id);
+
+            if (player == null)
+                return NotFound("Player not found.");
+
+            const int triumphCost = 300;
+
+            if (!player.SpendWarPoints(triumphCost))
+                return BadRequest($"Not enough available war points. A Triumph costs {triumphCost} BP.");
+
+            player.AddTriumphPoints(1);
+            _context.Entry(player).Property(p => p.AvailableWarPoints).IsModified = true;
+            _context.Entry(player).Property(p => p.TriumphPoints).IsModified = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Message = "Triumph organized.",
+                player.AvailableWarPoints,
+                player.TriumphPoints
+            });
+        }
+
+        // ════════════════════════════════════════════
         // DIPLOMACY ENDPOINTS
         // ════════════════════════════════════════════
 
@@ -386,6 +416,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 player.DefenseScore,
                 WarScore = player.WarScore,
                 player.TriumphPoints,
+                player.AvailableWarPoints,
                 ConquestLevel = player.ConquestLevel,
                 MaxSettlements = player.MaxSettlements,
                 TriumphPointsForNextLevel = player.TriumphPointsForNextLevel,

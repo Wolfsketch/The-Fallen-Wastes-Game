@@ -38,18 +38,12 @@
               </div>
             </div>
             <div class="settle-meta-item">
-              <div class="smilabel">WATER</div>
-              <div class="smivalue" :style="{color: (settlement?.water ?? 999) < 200 ? 'var(--red)' : 'var(--text)'}">
-                {{ settlement?.water ?? '—' }}
-              </div>
-            </div>
-            <div class="settle-meta-item">
               <div class="smilabel">MORALE</div>
               <div class="smivalue" :style="{color: moralColor}">{{ settlement?.morale ?? '—' }}%</div>
             </div>
             <div class="settle-meta-item">
               <div class="smilabel">BUILDINGS</div>
-              <div class="smivalue">{{ settlement?.buildingCount ?? '—' }}</div>
+              <div class="smivalue">{{ settlement?.buildingCount ?? 0 }}</div>
             </div>
             <div class="settle-meta-item">
               <div class="smilabel">UNITS</div>
@@ -86,6 +80,10 @@
               <div class="stat-value" style="color:#d4af37">{{ player?.triumphPoints ?? 0 }}</div>
             </div>
             <div class="stat-item">
+              <div class="stat-label">Available BP</div>
+              <div class="stat-value" style="color:#e07b39">{{ player?.availableWarPoints ?? 0 }}</div>
+            </div>
+            <div class="stat-item">
               <div class="stat-label">Settlements</div>
               <div class="stat-value" style="color:var(--text)">{{ player?.settlements?.length ?? 1 }} / {{ player?.maxSettlements ?? 1 }}</div>
             </div>
@@ -94,7 +92,83 @@
       </div>
     </div>
 
-    <!-- Row 2: Conquest Progress -->
+    <!-- Resources row -->
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-accent" />
+      <div class="panel-body">
+        <div class="panel-title"><span class="panel-dot" /> RESOURCE STOCKPILE</div>
+        <div class="res-grid">
+          <div class="res-item">
+            <div class="res-icon">💧</div>
+            <div class="res-label">WATER</div>
+            <div class="res-value" :style="{color: (settlement?.water ?? 0) < 200 ? 'var(--red)' : 'var(--text)'}">
+              {{ (settlement?.water ?? 0).toLocaleString() }}
+            </div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon">🌾</div>
+            <div class="res-label">FOOD</div>
+            <div class="res-value">{{ (settlement?.food ?? 0).toLocaleString() }}</div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon">⚙️</div>
+            <div class="res-label">SCRAP</div>
+            <div class="res-value">{{ (settlement?.scrap ?? 0).toLocaleString() }}</div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon">⛽</div>
+            <div class="res-label">FUEL</div>
+            <div class="res-value">{{ (settlement?.fuel ?? 0).toLocaleString() }}</div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon">⚡</div>
+            <div class="res-label">ENERGY</div>
+            <div class="res-value">{{ (settlement?.energy ?? 0).toLocaleString() }}</div>
+          </div>
+          <div class="res-item">
+            <div class="res-icon">🔬</div>
+            <div class="res-label">RARETECH</div>
+            <div class="res-value" style="color:#d4af37">{{ (settlement?.rareTech ?? 0).toLocaleString() }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: War Raids -->
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-accent" style="background:#e07b39" />
+      <div class="panel-body">
+        <div class="panel-title"><span class="panel-dot" style="background:#e07b39;box-shadow:0 0 6px #e07b39" /> WAR RAIDS</div>
+        <div class="war-raid-section">
+          <div class="war-raid-info">
+            <div class="war-raid-desc">
+              Spend <strong>300 BP</strong> to organize a War Raid. Your battle points (BP) are consumed but your ranking scores are never affected.
+            </div>
+            <div class="war-raid-bp">
+              <span class="wr-label">Available BP: </span>
+              <span class="wr-val" :style="{ color: (player?.availableWarPoints ?? 0) >= 300 ? '#e07b39' : 'var(--muted)' }">
+                {{ player?.availableWarPoints ?? 0 }}
+              </span>
+              <span class="wr-sep"> / </span>
+              <span class="wr-cost">300 BP</span>
+            </div>
+          </div>
+          <div class="war-raid-action">
+            <button
+              class="war-raid-btn"
+              :disabled="(player?.availableWarPoints ?? 0) < 300 || triumphPending"
+              @click="submitWarRaid"
+            >
+              {{ triumphPending ? 'ORGANIZING...' : '⚔ ORGANIZE WAR RAID' }}
+            </button>
+            <div v-if="triumphError" class="war-raid-error">{{ triumphError }}</div>
+            <div v-if="triumphSuccess" class="war-raid-success">{{ triumphSuccess }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Conquest Progress -->
     <div class="panel" style="margin-top:14px">
       <div class="panel-accent" />
       <div class="panel-body">
@@ -119,7 +193,7 @@
           </div>
         </div>
         <div class="conquest-level-list">
-          <div v-for="lvl in 6" :key="lvl" class="conquest-level-badge"
+          <div v-for="lvl in conquestLevelRange" :key="lvl" class="conquest-level-badge"
             :class="{ 'clb--achieved': (player?.conquestLevel ?? 1) >= lvl }">
             <span class="clb-lvl">L{{ lvl }}</span>
             <span class="clb-tp">{{ conquestTpRequired(lvl) }} TP</span>
@@ -146,13 +220,20 @@
         <div class="panel-title"><span class="panel-dot" /> OPERATIONS LOG</div>
         <div v-if="logLoading" class="log-empty">Loading...</div>
         <div v-else-if="logEntries.length === 0" class="log-empty">No activity recorded yet.</div>
-        <div v-else class="log-list">
-          <div v-for="(entry, i) in logEntries" :key="i" class="log-entry">
-            <span class="log-time">{{ entry.time }}</span>
-            <span class="tag" :class="'tag--' + entry.type">{{ entry.tag }}</span>
-            <span class="log-msg" :style="{ color: entry.color }">{{ entry.msg }}</span>
+        <template v-else>
+          <div class="log-list">
+            <div v-for="(entry, i) in pagedLogEntries" :key="i" class="log-entry">
+              <span class="log-time">{{ entry.time }}</span>
+              <span class="tag" :class="'tag--' + entry.type">{{ entry.tag }}</span>
+              <span class="log-msg" :style="{ color: entry.color }">{{ entry.msg }}</span>
+            </div>
           </div>
-        </div>
+          <div v-if="logPageCount > 1" class="log-pagination">
+            <button class="log-pg-btn" :disabled="logPage === 0" @click="logPage--">&#8249; Prev</button>
+            <span class="log-pg-info">Page {{ logPage + 1 }} / {{ logPageCount }}</span>
+            <button class="log-pg-btn" :disabled="logPage >= logPageCount - 1" @click="logPage++">Next &#8250;</button>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -160,7 +241,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { renameSettlement, foundSettlement, getPlayerReports, getPlayerById } from '../services/api.js'
+import { renameSettlement, foundSettlement, getPlayerReports, getPlayerById, organizeTriumph } from '../services/api.js'
 
 const props = defineProps({
   player: Object,
@@ -220,6 +301,27 @@ async function submitFoundSettlement() {
   }
 }
 
+// ── War Raid (Triumph) ───────────────────────────────────────
+const triumphPending = ref(false)
+const triumphError = ref('')
+const triumphSuccess = ref('')
+
+async function submitWarRaid() {
+  triumphError.value = ''
+  triumphSuccess.value = ''
+  triumphPending.value = true
+  try {
+    await organizeTriumph(props.player.id)
+    triumphSuccess.value = 'War Raid organized! −300 BP'
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.response?.data || 'Could not organize War Raid.'
+    triumphError.value = typeof msg === 'string' ? msg : JSON.stringify(msg)
+  } finally {
+    triumphPending.value = false
+  }
+}
+
 // ── Computed helpers ─────────────────────────────────────────
 const moralColor = computed(() => {
   const m = props.settlement?.morale ?? 100
@@ -232,6 +334,11 @@ const totalUnits = computed(() => {
   const inv = props.settlement?.unitInventory
   if (!inv) return 0
   return Object.values(inv).reduce((s, v) => s + v, 0)
+})
+
+const conquestLevelRange = computed(() => {
+  const max = Math.max(6, (props.player?.conquestLevel ?? 1) + 2)
+  return Array.from({ length: max }, (_, i) => i + 1)
 })
 
 const conquestPercent = computed(() => {
@@ -250,8 +357,14 @@ function conquestTpRequired(level) {
 }
 
 // ── Operations log ────────────────────────────────────────────
+const LOG_PAGE_SIZE = 20
+const logPage = ref(0)
 const logEntries = ref([])
 const logLoading = ref(true)
+const logPageCount = computed(() => Math.max(1, Math.ceil(logEntries.value.length / LOG_PAGE_SIZE)))
+const pagedLogEntries = computed(() =>
+  logEntries.value.slice(logPage.value * LOG_PAGE_SIZE, (logPage.value + 1) * LOG_PAGE_SIZE)
+)
 
 function parseLogEntry(msg) {
   const time = new Date(msg.sentAtUtc).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -292,7 +405,6 @@ async function loadLog() {
   try {
     const reports = await getPlayerReports(props.player?.id)
     const entries = (reports ?? [])
-      .slice(0, 30)
       .map(parseLogEntry)
 
     // Always add account creation entry at the bottom
@@ -355,6 +467,22 @@ onMounted(() => {
 .stat-label { font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:700 }
 .stat-value { font-size:18px;font-family:var(--ff-title);font-weight:700;letter-spacing:1px }
 
+/* War Raids */
+.war-raid-section { display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap }
+.war-raid-info { flex:1;min-width:0 }
+.war-raid-desc { font-size:10px;color:var(--muted);margin-bottom:10px;line-height:1.6 }
+.war-raid-desc strong { color:var(--text) }
+.war-raid-gp { font-family:var(--ff-title);font-size:15px }
+.wr-label { font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px }
+.wr-val { font-size:22px;font-weight:700 }
+.wr-sep,.wr-cost { color:var(--muted);font-size:14px }
+.war-raid-action { display:flex;flex-direction:column;gap:8px;align-items:flex-start }
+.war-raid-btn { padding:10px 22px;background:rgba(224,123,57,.12);border:1px solid #e07b39;color:#e07b39;font-family:var(--ff-title);font-size:11px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;transition:background .2s }
+.war-raid-btn:hover:not(:disabled) { background:rgba(224,123,57,.25) }
+.war-raid-btn:disabled { opacity:.4;cursor:not-allowed }
+.war-raid-error { font-size:10px;color:var(--red) }
+.war-raid-success { font-size:10px;color:var(--green) }
+
 /* Conquest */
 .conquest-row { display:flex;gap:24px;align-items:flex-start;margin-bottom:14px }
 .conquest-info { flex:1;min-width:0 }
@@ -382,8 +510,22 @@ onMounted(() => {
 .found-btn:disabled { opacity:.5;cursor:default }
 .found-error { font-size:10px;color:var(--red);margin-top:6px }
 
+/* Resources */
+.res-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:10px }
+.res-item { background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.08);padding:10px;text-align:center }
+.res-icon { font-size:16px;margin-bottom:4px }
+.res-label { font-size:7px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px }
+.res-value { font-family:var(--ff-title);font-size:14px;color:var(--text);font-weight:700 }
+
 /* Log */
-.log-list { display:flex;flex-direction:column;gap:2px }
+.log-list { display:flex;flex-direction:column;gap:2px;max-height:400px;overflow-y:auto;padding-right:4px }
+.log-list::-webkit-scrollbar { width:4px }
+.log-list::-webkit-scrollbar-track { background:rgba(0,212,255,.05) }
+.log-list::-webkit-scrollbar-thumb { background:rgba(0,212,255,.25);border-radius:2px }
+.log-pagination { display:flex;align-items:center;justify-content:center;gap:14px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,212,255,.08) }
+.log-pg-btn { background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);color:var(--cyan);font-family:var(--ff-title);font-size:9px;letter-spacing:1px;padding:4px 10px;cursor:pointer }
+.log-pg-btn:disabled { opacity:.3;cursor:default }
+.log-pg-info { font-size:9px;color:var(--muted);letter-spacing:1px }
 .log-empty { font-size:11px;color:var(--muted);padding:4px 0 }
 .log-entry { font-size:10px;line-height:2.6;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,212,255,.04) }
 .log-time { font-family:var(--ff-title);font-size:9px;color:var(--cyan-dim);letter-spacing:1px;min-width:82px }

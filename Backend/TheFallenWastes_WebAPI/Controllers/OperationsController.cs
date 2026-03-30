@@ -297,9 +297,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                                     if (killed > 0)
                                     {
                                         raidAttackerPlayer.SetAttackScore(raidAttackerPlayer.AttackScore + killed);
-                                        raidAttackerPlayer.AddTriumphPoints(killed);
+                                        raidAttackerPlayer.EarnWarPoints(killed);
                                         _db.Entry(raidAttackerPlayer).Property(p => p.AttackScore).IsModified = true;
-                                        _db.Entry(raidAttackerPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                        _db.Entry(raidAttackerPlayer).Property(p => p.AvailableWarPoints).IsModified = true;
                                     }
                                 }
                             }
@@ -315,6 +315,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                         var defSett = await _db.Settlements
                             .Include(s => s.Buildings)
                             .FirstOrDefaultAsync(s => s.Id == op.TargetSettlementId.Value);
+
+                        // Reload from DB to bypass EF identity map — ensures fresh UnitInventory
+                        // when multiple attacks target the same settlement in one processing tick.
+                        if (defSett != null)
+                            await _db.Entry(defSett).ReloadAsync();
 
                         if (atkSett != null && defSett != null)
                         {
@@ -434,6 +439,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 lootedResources = looted,
                                 attackerSettlementName = atkSett.Name,
                                 defenderSettlementName = defSett.Name,
+                                attackPointsGained  = atkWins  ? defLosses.Values.Sum() : 0,
+                                defensePointsGained = !atkWins ? atkLosses.Values.Sum() : 0,
                             });
                             op.SetResult(battleJson);
 
@@ -468,6 +475,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                                     lootedResources = looted,
                                     attackerSettlementName = atkSett.Name,
                                     defenderSettlementName = defSett.Name,
+                                    attackPointsGained  = atkWins  ? defLosses.Values.Sum() : 0,
+                                    defensePointsGained = !atkWins ? atkLosses.Values.Sum() : 0,
                                 });
                                 _db.Messages.Add(new Message(
                                     senderPlayerId: defPlayer.Id,
@@ -486,9 +495,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 if (atkWins && atkKilled > 0)
                                 {
                                     atkPlayer.SetAttackScore(atkPlayer.AttackScore + atkKilled);
-                                    atkPlayer.AddTriumphPoints(atkKilled);
+                                    atkPlayer.EarnWarPoints(atkKilled);
                                     _db.Entry(atkPlayer).Property(p => p.AttackScore).IsModified = true;
-                                    _db.Entry(atkPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                    _db.Entry(atkPlayer).Property(p => p.AvailableWarPoints).IsModified = true;
                                 }
                             }
                             if (defPlayer != null)
@@ -497,9 +506,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 if (!atkWins && defKilled > 0)
                                 {
                                     defPlayer.SetDefenseScore(defPlayer.DefenseScore + defKilled);
-                                    defPlayer.AddTriumphPoints(defKilled);
+                                    defPlayer.EarnWarPoints(defKilled);
                                     _db.Entry(defPlayer).Property(p => p.DefenseScore).IsModified = true;
-                                    _db.Entry(defPlayer).Property(p => p.TriumphPoints).IsModified = true;
+                                    _db.Entry(defPlayer).Property(p => p.AvailableWarPoints).IsModified = true;
                                 }
                             }
                         }
@@ -579,6 +588,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                             defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2,
                             lootedResources = loot2,
                             attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name,
+                            attackPointsGained  = wins2  ? dLoss2.Values.Sum() : 0,
+                            defensePointsGained = !wins2 ? aLoss2.Values.Sum() : 0,
                         });
                         op.SetResult(bj2);
                         var ap2 = await _db.Players.FirstOrDefaultAsync(p => p.Id == atkSett2.PlayerId);
@@ -590,21 +601,20 @@ namespace TheFallenWastes_WebAPI.Controllers
                         if (dp2 != null && (ap2 == null || dp2.Id != ap2.Id))
                             _db.Messages.Add(new Message(dp2.Id, dp2.Id,
                                 wins2 ? $"\u26a0 Your settlement was raided by {atkSett2.Name}" : $"\u2713 Attack repelled from {atkSett2.Name}",
-                                JsonSerializer.Serialize(new { isSettlementBattleReport = true, isDefenseReport = true, attackerWins = wins2, attackerSentUnits = sent2, attackerLosses = aLoss2, attackerSurvived = surv2, defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2, lootedResources = loot2, attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name }),
+                                JsonSerializer.Serialize(new { isSettlementBattleReport = true, isDefenseReport = true, attackerWins = wins2, attackerSentUnits = sent2, attackerLosses = aLoss2, attackerSurvived = surv2, defenderUnits = def2, defenderLosses = dLoss2, defenderSurvived = dSurv2, lootedResources = loot2, attackerSettlementName = atkSett2.Name, defenderSettlementName = defSett2.Name, attackPointsGained = wins2 ? dLoss2.Values.Sum() : 0, defensePointsGained = !wins2 ? aLoss2.Values.Sum() : 0 }),
                                 "report"));
 
                         // ── Score: orphaned battle ──
-                        if (ap2 != null) { int k2 = dLoss2.Values.Sum(); if (wins2 && k2 > 0) { ap2.SetAttackScore(ap2.AttackScore + k2); ap2.AddTriumphPoints(k2); _db.Entry(ap2).Property(p => p.AttackScore).IsModified = true; _db.Entry(ap2).Property(p => p.TriumphPoints).IsModified = true; } }
-                        if (dp2 != null) { int k2d = aLoss2.Values.Sum(); if (!wins2 && k2d > 0) { dp2.SetDefenseScore(dp2.DefenseScore + k2d); dp2.AddTriumphPoints(k2d); _db.Entry(dp2).Property(p => p.DefenseScore).IsModified = true; _db.Entry(dp2).Property(p => p.TriumphPoints).IsModified = true; } }
+                        if (ap2 != null) { int k2 = dLoss2.Values.Sum(); if (wins2 && k2 > 0) { ap2.SetAttackScore(ap2.AttackScore + k2); ap2.EarnWarPoints(k2); _db.Entry(ap2).Property(p => p.AttackScore).IsModified = true; _db.Entry(ap2).Property(p => p.AvailableWarPoints).IsModified = true; } }
+                        if (dp2 != null) { int k2d = aLoss2.Values.Sum(); if (!wins2 && k2d > 0) { dp2.SetDefenseScore(dp2.DefenseScore + k2d); dp2.EarnWarPoints(k2d); _db.Entry(dp2).Property(p => p.DefenseScore).IsModified = true; _db.Entry(dp2).Property(p => p.AvailableWarPoints).IsModified = true; } }
                     }
                     int retSecs2 = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                     op.MarkReturning(retSecs2);
                 }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                 {
-                    // Settlement attack return: restore surviving units + loot to attacker
-                    if (op.OperationType == "attack_settlement"
-                        && !string.IsNullOrEmpty(op.ResultJson))
+                    // Restore surviving units and any looted resources to the home settlement
+                    if (!string.IsNullOrEmpty(op.ResultJson))
                     {
                         var homeSett = await _db.Settlements
                             .Include(s => s.Buildings)
@@ -768,13 +778,52 @@ namespace TheFallenWastes_WebAPI.Controllers
             var operation = await _db.Operations
                 .FirstOrDefaultAsync(o => o.Id == operationId
                     && o.AttackerSettlementId == settlementId
-                    && o.Phase == "arrived");
+                    && (o.Phase == "arrived" || o.Phase == "outbound"));
             if (operation == null)
-                return NotFound("No active arrived operation found.");
+                return NotFound("No active operation found to recall.");
 
-            int lootEarned = operation.CalculateLootItemsEarned(DateTime.UtcNow);
-            operation.SetLootCollected(lootEarned);
+            bool wasOutbound = operation.Phase == "outbound";
+            int lootEarned = 0;
             int returnSeconds = (int)(operation.ArrivesAtUtc - operation.StartedAtUtc).TotalSeconds;
+
+            if (!wasOutbound)
+            {
+                // Already at destination — collect partial loot and send back
+                lootEarned = operation.CalculateLootItemsEarned(DateTime.UtcNow);
+                operation.SetLootCollected(lootEarned);
+            }
+            else
+            {
+                // En route — no loot. Mark all sent units as survivors so they are
+                // restored to inventory when the returning leg completes.
+                if (!string.IsNullOrEmpty(operation.SentUnitsJson))
+                {
+                    var allUnits = JsonSerializer.Deserialize<Dictionary<string, int>>(operation.SentUnitsJson)
+                        ?? new Dictionary<string, int>();
+                    var recallJson = JsonSerializer.Serialize(new
+                    {
+                        attackerSurvived = allUnits,
+                        lootedResources  = new { water = 0, food = 0, scrap = 0, fuel = 0, energy = 0 }
+                    });
+                    operation.SetResult(recallJson);
+                }
+
+                // For scout ops: return the RareTech investment to the vault immediately
+                if (operation.OperationType == "scout_poi"
+                    && operation.ScoutRareTech.HasValue
+                    && operation.ScoutRareTech.Value > 0)
+                {
+                    var settlement = await _db.Settlements
+                        .FirstOrDefaultAsync(s => s.Id == settlementId);
+                    if (settlement != null)
+                    {
+                        settlement.DepositToVault(operation.ScoutRareTech.Value);
+                        operation.ClearScoutRareTech();
+                        _db.Entry(settlement).Property(s => s.VaultRareTech).IsModified = true;
+                    }
+                }
+            }
+
             operation.MarkReturning(returnSeconds);
             await _db.SaveChangesAsync();
 
@@ -782,7 +831,9 @@ namespace TheFallenWastes_WebAPI.Controllers
             {
                 lootEarned,
                 returnsAtUtc = operation.ReturnsAtUtc,
-                message = $"Troops recalled. {lootEarned} loot item(s) collected."
+                message = wasOutbound
+                    ? "Troops recalled en route. No loot collected."
+                    : $"Troops recalled. {lootEarned} loot item(s) collected."
             });
         }
 

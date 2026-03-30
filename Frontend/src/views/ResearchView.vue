@@ -776,14 +776,14 @@ async function activateResearchCommander() {
   if (!props.player?.id) return
 
   try {
-    await activateAdvisor(props.player.id, 'scientist', 14)
+    await activateAdvisor(props.player.id, 'techpriest', 14)
     showResearchCommanderInfo.value = false
 
     if (props.refreshSettlement) {
       await props.refreshSettlement()
     }
   } catch (err) {
-    error.value = err?.response?.data || 'Scientist activation failed.'
+    error.value = err?.response?.data || 'Tech Priest activation failed.'
   }
 }
 

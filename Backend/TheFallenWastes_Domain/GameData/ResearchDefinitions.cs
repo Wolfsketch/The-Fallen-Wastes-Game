@@ -89,7 +89,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "rationing_protocols",
                 name: "Rationing Protocols",
-                description: "Verhoogt de efficiëntie van Food-verbruik en interne distributie.",
+                description: "Increases the efficiency of Food consumption and internal distribution.",
                 branch: "Economy",
                 requiredTechLabLevel: 1,
                 rareTechCost: 10,
@@ -99,7 +99,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "water_recycling",
                 name: "Water Recycling",
-                description: "Verhoogt de efficiëntie van Water-verwerking in de settlement.",
+                description: "Increases the efficiency of Water processing in the settlement.",
                 branch: "Economy",
                 requiredTechLabLevel: 2,
                 rareTechCost: 14,
@@ -110,7 +110,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "scrap_sorting",
                 name: "Scrap Sorting",
-                description: "Verbetert de opbrengst van herwonnen Scrap-materialen.",
+                description: "Improves the yield of recovered Scrap materials.",
                 branch: "Economy",
                 requiredTechLabLevel: 3,
                 rareTechCost: 18,
@@ -122,7 +122,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "improved_ballistics",
                 name: "Improved Ballistics",
-                description: "Verbetert Ballistic-wapenplatformen en munitie-output.",
+                description: "Enhances Ballistic weapon platforms and ammunition output.",
                 branch: "Military",
                 requiredTechLabLevel: 2,
                 rareTechCost: 16,
@@ -132,7 +132,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "impact_plating",
                 name: "Impact Plating",
-                description: "Verhoogt bescherming tegen zware Impact-aanvallen.",
+                description: "Increases protection against heavy Impact-type attacks.",
                 branch: "Military",
                 requiredTechLabLevel: 3,
                 rareTechCost: 22,
@@ -142,7 +142,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "energy_focusing",
                 name: "Energy Focusing",
-                description: "Verbetert stabiliteit en output van Energy-gebaseerde wapens.",
+                description: "Improves stability and output of Energy-based weapon systems.",
                 branch: "Military",
                 requiredTechLabLevel: 4,
                 rareTechCost: 28,
@@ -155,7 +155,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "fortified_barriers",
                 name: "Fortified Barriers",
-                description: "Versterkt de structurele efficiëntie van Perimeter Wall-systemen.",
+                description: "Reinforces the structural efficiency of Perimeter Wall systems.",
                 branch: "Defense",
                 requiredTechLabLevel: 3,
                 rareTechCost: 24,
@@ -165,7 +165,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "emergency_response_drills",
                 name: "Emergency Response Drills",
-                description: "Verbetert reactietijd van verdediging en interne paraatheid.",
+                description: "Improves defense response time and internal combat readiness.",
                 branch: "Defense",
                 requiredTechLabLevel: 4,
                 rareTechCost: 26,
@@ -177,7 +177,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "convoy_protocols",
                 name: "Convoy Protocols",
-                description: "Ontgrendelt en ondersteunt geavanceerde Convoy-operaties.",
+                description: "Unlocks and supports advanced Convoy operations.",
                 branch: "Logistics",
                 requiredTechLabLevel: 5,
                 rareTechCost: 35,
@@ -188,7 +188,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "field_logistics",
                 name: "Field Logistics",
-                description: "Verbetert transportcoördinatie en operationele inzetbaarheid.",
+                description: "Improves transport coordination and operational deployment efficiency.",
                 branch: "Logistics",
                 requiredTechLabLevel: 4,
                 rareTechCost: 30,
@@ -200,7 +200,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "salvage_optimization",
                 name: "Salvage Optimization",
-                description: "Verhoogt de efficiëntie van de Tech Salvager bij gewone recoveries.",
+                description: "Increases the efficiency of the Tech Salvager during standard recovery operations.",
                 branch: "Salvage",
                 requiredTechLabLevel: 2,
                 rareTechCost: 15,
@@ -210,7 +210,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "datacore_reconstruction",
                 name: "Datacore Reconstruction",
-                description: "Maakt complexere event- en POI-artefacten bruikbaar voor research.",
+                description: "Enables complex event and POI artefacts to be processed for research use.",
                 branch: "Salvage",
                 requiredTechLabLevel: 5,
                 rareTechCost: 40,
@@ -224,7 +224,7 @@ namespace TheFallenWastes_Domain.GameData
             new ResearchDefinition(
                 key: "settlement_coordination",
                 name: "Settlement Coordination",
-                description: "Verbetert bestuurlijke coördinatie tussen meerdere settlements.",
+                description: "Improves administrative coordination between multiple settlements.",
                 branch: "Expansion",
                 requiredTechLabLevel: 6,
                 rareTechCost: 45,

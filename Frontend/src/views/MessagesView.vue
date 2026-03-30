@@ -249,6 +249,20 @@
             </template>
             <div v-else-if="parsedReportBody.attackerWins && !parsedReportBody.isDefenseReport"
                  style="font-size:11px;color:var(--muted)">No resources to plunder.</div>
+
+            <!-- TP / score earned -->
+            <div v-if="parsedReportBody.isDefenseReport && (parsedReportBody.defensePointsGained ?? 0) > 0"
+                 class="report-tp-row">
+              <span class="report-tp-icon">🛡</span>
+              <span class="report-tp-label">Defense Points earned:</span>
+              <span class="report-tp-value">+{{ parsedReportBody.defensePointsGained }}</span>
+            </div>
+            <div v-else-if="!parsedReportBody.isDefenseReport && (parsedReportBody.attackPointsGained ?? 0) > 0"
+                 class="report-tp-row">
+              <span class="report-tp-icon">⚔</span>
+              <span class="report-tp-label">Attack Points earned:</span>
+              <span class="report-tp-value">+{{ parsedReportBody.attackPointsGained }}</span>
+            </div>
           </div>
 
           <!-- POI/NPC BATTLE REPORT -->
@@ -957,6 +971,7 @@ watch(() => route.query, () => {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  max-height: calc(100vh - 330px);
 }
 
 .msg-list-empty {
@@ -1248,6 +1263,21 @@ watch(() => route.query, () => {
   border: 1px solid var(--border);
 }
 .report-loot-item { font-size: 11px; color: var(--green); padding: 3px 0; }
+.report-tp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: rgba(255,200,64,.06);
+  border: 1px solid rgba(255,200,64,.25);
+  font-family: var(--ff-title);
+  font-size: 11px;
+  letter-spacing: .5px;
+}
+.report-tp-icon { font-size: 13px; }
+.report-tp-label { color: var(--muted); flex: 1; }
+.report-tp-value { color: #ffc840; font-weight: 700; }
 
 /* Unit images in battle report */
 .unit-img-small { width: 26px; height: 26px; object-fit: contain; display: block; }

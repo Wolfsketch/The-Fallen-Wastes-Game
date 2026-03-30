@@ -96,5 +96,6 @@ namespace TheFallenWastes_Domain.Entities
         }
 
         public void SetLootCollected(int count) { LootItemsCollected = count; }
+        public void ClearScoutRareTech() { ScoutRareTech = 0; }
     }
 }

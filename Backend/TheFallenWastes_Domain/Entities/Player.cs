@@ -17,6 +17,7 @@ namespace TheFallenWastes_Domain.Entities
         public int AttackScore { get; private set; }
         public int DefenseScore { get; private set; }
         public int TriumphPoints { get; private set; }
+        public int AvailableWarPoints { get; private set; }
 
         public int WarScore => AttackScore + DefenseScore;
 
@@ -340,6 +341,18 @@ namespace TheFallenWastes_Domain.Entities
         public void AddTriumphPoints(int amount)
         {
             if (amount > 0) TriumphPoints += amount;
+        }
+
+        public void EarnWarPoints(int amount)
+        {
+            if (amount > 0) AvailableWarPoints += amount;
+        }
+
+        public bool SpendWarPoints(int amount)
+        {
+            if (amount <= 0 || AvailableWarPoints < amount) return false;
+            AvailableWarPoints -= amount;
+            return true;
         }
 
         public void AddSettlement(Settlement settlement)

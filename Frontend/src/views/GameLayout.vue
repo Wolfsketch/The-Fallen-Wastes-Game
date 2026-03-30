@@ -398,6 +398,7 @@ async function loadSettlementData() {
       vaultRareTech: data.vaultRareTech ?? settlement.value?.vaultRareTech ?? 0,
       raidVaultCapacity: data.raidVaultCapacity ?? settlement.value?.raidVaultCapacity ?? 0,
       raidVaultLevel: data.raidVaultLevel ?? settlement.value?.raidVaultLevel ?? 0,
+      buildingCount: data.buildingCount ?? settlement.value?.buildingCount ?? 0,
       unitInventory: data.unitInventory ?? data.UnitInventory ?? settlement.value?.unitInventory ?? {}
     }
   } catch (err) {
@@ -425,6 +426,7 @@ function setPlayerData(data) {
     defenseScore: data.defenseScore ?? 0,
     warScore: data.warScore ?? 0,
     triumphPoints: data.triumphPoints ?? 0,
+    availableWarPoints: data.availableWarPoints ?? 0,
     conquestLevel: data.conquestLevel ?? 1,
     maxSettlements: data.maxSettlements ?? 1,
     triumphPointsForNextLevel: data.triumphPointsForNextLevel ?? 3,
@@ -462,6 +464,7 @@ function setPlayerData(data) {
       vaultRareTech: data.vaultRareTech ?? s?.vaultRareTech ?? 0,
       raidVaultCapacity: data.raidVaultCapacity ?? s?.raidVaultCapacity ?? 0,
       raidVaultLevel: data.raidVaultLevel ?? s?.raidVaultLevel ?? 0,
+      buildingCount: s.buildingCount ?? 0,
       unitInventory: s.unitInventory ?? s.UnitInventory ?? {}
     }
     sessionStorage.setItem('settlementId', s.id)

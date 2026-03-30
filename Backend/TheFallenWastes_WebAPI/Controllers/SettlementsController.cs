@@ -176,6 +176,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                     }).ToList()
                 },
 
+                BuildingCount = settlement.Buildings.Count(b => b.Level > 0),
+
                 Buildings = settlement.Buildings
                     .OrderBy(b => BuildingDefinitions.GetCategory(b.Type))
                     .ThenBy(b => b.Type)

@@ -215,7 +215,7 @@
             </div>
           </div>
         </div>
-        <div class="tt-stats" v-if="hoverItem._type === 'slot' && hoverItem.status !== 'empty'"><span class="tt-stat">⚔ {{ hoverItem.defense || 0 }}</span><span class="tt-stat">★ {{ hoverItem.score || 0 }}</span></div>
+        <div class="tt-stats" v-if="hoverItem._type === 'slot' && hoverItem.status !== 'empty'"><span class="tt-stat">★ {{ hoverItem.score || 0 }}</span></div>
         <div class="tt-stats" v-if="hoverItem._type === 'slot' && hoverItem.status === 'empty'"><span class="tt-stat-hint">Click to claim</span></div>
         <div class="tt-stats" v-if="hoverItem._type === 'poi'"><span class="tt-stat-hint">{{ arrivedPoiIds.has(hoverItem.id) ? 'Activity detected' : 'Click to inspect' }}</span></div>
       </div>
@@ -246,7 +246,7 @@
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv ssv--a">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">ALLIANCE</div><div class="ssv ssv--a">{{ sel.alliance || '—' }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
           </template>
           <template v-if="sel.status === 'neutral' || sel.status === 'enemy'">
-            <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv" :class="ownerColor(sel.status)">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div><div class="ss"><div class="ssl">DEF</div><div class="ssv">{{ sel.defense }}</div></div></div>
+            <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv" :class="ownerColor(sel.status)">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
             <div class="sp-actions">
               <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button></div>
               <div class="sa-w sa-w--diplo">
@@ -308,6 +308,9 @@
               <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
               <button class="sa sa--raid" @click="openAttackModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">⚔ Raid</button>
               <button v-if="selectedPoiHasNonOwnArrival" class="sa sa--reinforce" @click="openReinforceModal">⛊ Reinforce</button>
+            </div>
+            <div v-if="!ownArrivedAtSelectedPoi && ownOutboundAtSelectedPoi" class="sa-w" style="margin-top:4px">
+              <button class="sa sa--recall" @click="recallTroops(ownOutboundAtSelectedPoi)">↩ Recall En Route</button>
             </div>
             <div class="sa-w" v-else>
               <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
@@ -661,6 +664,16 @@ const ownArrivedAtSelectedPoi = computed(() => {
     op.phase === 'arrived' &&
     op.poiId === selPoi.value.id &&
     op.operationType === 'raid_poi'
+  ) ?? null
+})
+
+const ownOutboundAtSelectedPoi = computed(() => {
+  if (!selPoi.value) return null
+  return operations.value.find(op =>
+    op.isOwn &&
+    op.phase === 'outbound' &&
+    op.poiId === selPoi.value.id &&
+    (op.operationType === 'raid_poi' || op.operationType === 'scout_poi')
   ) ?? null
 })
 
@@ -1723,6 +1736,8 @@ onMounted(async () => {
     })
     if (removedReturning.length > 0) {
       console.log('[FRAME-REMOVE-RETURNING]', removedReturning.map(o => `id=${o.id} returnsAtUtc=${o.returnsAtUtc} now=${new Date(now).toISOString()}`))
+      // Units just arrived home — refresh settlement so unitInventory is up to date
+      if (props.refreshSettlement) props.refreshSettlement()
     }
     operations.value = operations.value.filter(op => {
       if (op.phase === 'arrived') return true
