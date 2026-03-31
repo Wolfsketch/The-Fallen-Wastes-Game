@@ -52,13 +52,31 @@
                 </div>
               </template>
 
+              <!-- ACTIVE SIEGE WARNING -->
+              <template v-if="isUnderSiege">
+                <div class="movements-section-title movements-section-title--incoming">
+                  <span>🏴 UNDER SIEGE</span>
+                </div>
+                <div v-for="op in siegeOpsAtSettlement" :key="'siege-'+op.id" class="movement-row movement-row--incoming">
+                  <div class="movement-icon">🏴</div>
+                  <div class="movement-info">
+                    <div class="movement-target" style="color:#ff5050">{{ op.playerName ?? 'Unknown' }}</div>
+                    <div class="movement-units" style="color:#ff9040">Convoy stationed — settlement at risk</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status" style="color:#ff4040">●</div>
+                    <div class="movement-time" style="color:#ff5050">SIEGE</div>
+                  </div>
+                </div>
+              </template>
+
               <!-- EN ROUTE -->
               <template v-if="allMovements.filter(o => o.phase === 'outbound').length > 0">
                 <div class="movements-section-title">EN ROUTE →</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'outbound')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">
-                    {{ op.operationType?.includes('scout') ? '👁' : op.operationType === 'reinforce_poi' ? '⛊' : '⚔' }}
+                    {{ op.operationType?.includes('scout') ? '👁' : (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}
                   </div>
                   <div class="movement-info">
                     <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
@@ -84,7 +102,7 @@
                 <div class="movements-section-title">PRESENT ●</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout'))"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
-                  <div class="movement-icon">{{ op.operationType === 'reinforce_poi' ? '⛊' : '⚔' }}</div>
+                  <div class="movement-icon">{{ (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}</div>
                   <div class="movement-info">
                     <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
                     <div class="movement-units">{{ op.unitSummary ?? '—' }}</div>
@@ -259,7 +277,7 @@
           <template v-if="sel.status === 'neutral' || sel.status === 'enemy'">
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv" :class="ownerColor(sel.status)">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
             <div class="sp-actions">
-              <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button></div>
+              <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button><button class="sa sa--reinforce" @click="openReinforceSettlementModal()">⛊ Reinforce</button></div>
               <div class="sa-w sa-w--diplo">
                 <button class="sa sa--m" @click="openMailToSelected">✉ Mail</button>
                 <button v-if="sel.status !== 'enemy'" class="sa sa--e" @click="markAs('Enemy')">⚔ Enemy</button>
@@ -293,15 +311,13 @@
             </div>
           </div>
           <div class="ss-w">
-            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv ssv--unknown">
-              <span>{{ selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???' }}</span>
+            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--available' : 'ssv--unknown'">
+              <span>{{ poiStates[selPoi?.id]?.isCleared ? '0' : (selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???') }}</span>
             </div></div>
-            <div class="ss"><div class="ssl">LOOT</div><div class="ssv ssv--unknown">
-              <span>{{ selectedPoiScoutResult?.lootItems?.length
-                ? selectedPoiScoutResult.lootItems.length + ' items'
-                : '???' }}</span>
+            <div class="ss"><div class="ssl">LOOT</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--available' : 'ssv--unknown'">
+              <span>{{ poiStates[selPoi?.id]?.isCleared ? '0 items' : (selectedPoiScoutResult?.lootItems?.length ? selectedPoiScoutResult.lootItems.length + ' items' : '???') }}</span>
             </div></div>
-            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available'">{{ arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE' }}</div></div>
+            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--cleared' : (arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available')">{{ poiStates[selPoi?.id]?.isCleared ? 'CLEARED' : (arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE') }}</div></div>
           </div>
           <div v-if="allianceAtPoi(selPoi.id).length > 0" class="poi-alliance-intel">
             <div class="pai-title">◆ ALLIANCE PRESENCE</div>
@@ -316,7 +332,7 @@
           </div>
           <div class="sp-actions">
             <div class="sa-w" v-if="!ownArrivedAtSelectedPoi">
-              <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
+              <button class="sa sa--s" @click="openScoutModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
               <button class="sa sa--raid" @click="openAttackModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">⚔ Raid</button>
               <button v-if="selectedPoiHasNonOwnArrival" class="sa sa--reinforce" @click="openReinforceModal">⛊ Reinforce</button>
             </div>
@@ -324,7 +340,7 @@
               <button class="sa sa--recall" @click="recallTroops(ownOutboundAtSelectedPoi)">↩ Recall En Route</button>
             </div>
             <div class="sa-w" v-else-if="ownArrivedAtSelectedPoi">
-              <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
+              <button class="sa sa--s" @click="openScoutModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
               <button class="sa sa--reinforce" @click="openAttackModal('poi')">⛊ Reinforce</button>
               <button class="sa sa--recall" @click="recallTroops(ownArrivedAtSelectedPoi)">↩ Return Troops</button>
               <div v-if="ownArrivedAtSelectedPoi?.lootItemsEarned > 0"
@@ -461,6 +477,13 @@
                 </div>
               </div>
               <div class="modal-hint">Total selected: {{ Object.values(attackModal.selectedUnits).reduce((s, v) => s + (v || 0), 0) }}</div>
+              <div v-if="attackModal.type === 'settlement' && !attackModal.isReinforce && (attackModal.selectedUnits['Convoy'] ?? 0) > 0" class="modal-convoy-tp">
+                <span :class="convoyHasEnoughTp ? 'convoy-tp--ok' : 'convoy-tp--warn'">
+                  {{ convoyHasEnoughTp
+                    ? '✔ Conquest enabled — Convoy will begin a siege if you win.'
+                    : '✘ Insufficient Triumph Points — Convoy returns empty if you win.' }}
+                </span>
+              </div>
               <div class="modal-vault-info" style="margin-top:8px">
                 <span class="modal-label">TRAVEL TIME</span>
                 <span class="modal-value">{{ formatTravelTime(estimatedTravelSeconds) }}</span>
@@ -655,7 +678,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
-import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates, recallOperation, foundSettlement } from '../services/api.js'
+import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, reinforceSettlement, getPoiStates, recallOperation, foundSettlement } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 const unitImages = import.meta.glob('../images/*.png', { eager: true, import: 'default' })
@@ -832,6 +855,18 @@ const incomingOps = computed(() =>
 const isUnderAttack = computed(() =>
   incomingOps.value.some(op => op.phase === 'outbound')
 )
+
+// Enemy attack_settlement ops that arrived and didn't return = active siege
+const siegeOpsAtSettlement = computed(() =>
+  operations.value.filter(op =>
+    !op.isOwn && !op.isAlliance &&
+    op.phase === 'arrived' &&
+    op.operationType === 'attack_settlement' &&
+    op.targetSettlementId === props.settlement?.id
+  )
+)
+
+const isUnderSiege = computed(() => siegeOpsAtSettlement.value.length > 0)
 
 const overlayMuted = ref(false)
 
@@ -1257,6 +1292,19 @@ function openReinforceModal() {
   attackModal.value = { open: true, type: 'poi', raidMode: 'quick', selectedUnits: {}, error: '', isReinforce: true }
 }
 
+function openReinforceSettlementModal() {
+  attackModal.value = { open: true, type: 'settlement', raidMode: 'quick', selectedUnits: {}, error: '', isReinforce: true }
+}
+
+const convoyHasEnoughTp = computed(() => {
+  const count = props.player?.settlements?.length ?? 1
+  const max = props.player?.maxSettlements ?? 1
+  if (count < max) return true
+  const tp = props.player?.triumphPoints ?? 0
+  const needed = props.player?.triumphPointsForNextLevel ?? 3
+  return tp >= needed
+})
+
 async function confirmAttack() {
   const modal = attackModal.value
   const units = Object.fromEntries(
@@ -1276,7 +1324,11 @@ async function confirmAttack() {
         await attackPoi(props.settlement.id, selPoi.value.id, units, modal.raidMode, _travelSec)
       }
     } else if (modal.type === 'settlement' && sel.value?.id) {
-      await attackSettlement(props.settlement.id, sel.value.id, units, _travelSec)
+      if (modal.isReinforce) {
+        await reinforceSettlement(props.settlement.id, sel.value.id, units, _travelSec)
+      } else {
+        await attackSettlement(props.settlement.id, sel.value.id, units, _travelSec)
+      }
     }
     const _wasReinforce = modal.isReinforce ?? false
     const _type = modal.type
@@ -1293,7 +1345,7 @@ async function confirmAttack() {
       operations.value.push({
         id: 'local-attack-' + Date.now(),
         phase: 'outbound',
-        operationType: _type === 'settlement' ? 'attack_settlement' : (_wasReinforce ? 'reinforce_poi' : 'raid_poi'),
+        operationType: _type === 'settlement' ? (_wasReinforce ? 'reinforce_settlement' : 'attack_settlement') : (_wasReinforce ? 'reinforce_poi' : 'raid_poi'),
         originX: ownSlotA.x, originY: ownSlotA.y,
         destX, destY,
         startTime: Date.now(),
@@ -2009,6 +2061,7 @@ onUnmounted(() => {
 .ssv--unknown{color:var(--muted);font-size:13px}
 .ssv--active{color:#3dff9c;font-size:12px}
 .ssv--available{color:var(--cyan);font-size:12px}
+.ssv--cleared{color:#ffc840;font-size:12px}
 .sp-d{font-size:10px;color:var(--text);max-width:300px;line-height:1.4}
 .sp-actions{display:flex;align-items:center;gap:12px;flex:1;flex-wrap:wrap}
 .sa-w{display:flex;gap:6px;flex-wrap:wrap}
@@ -2086,6 +2139,9 @@ onUnmounted(() => {
 .modal-unit-avail{font-size:9px;color:var(--muted);font-family:var(--ff-title);letter-spacing:.8px;min-width:52px;text-align:right}
 .modal-input--sm{width:58px}
 .modal-error-msg{padding:8px 10px;border:1px solid rgba(255,60,60,.3);background:rgba(255,60,60,.06);color:#ff7060;font-size:10px}
+.modal-convoy-tp{margin-top:6px;padding:7px 10px;border-radius:2px;font-size:10px;font-family:var(--ff-title);letter-spacing:.8px}
+.convoy-tp--ok{color:#40e0a0}
+.convoy-tp--warn{color:#ffc840}
 .modal-vault-info{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(0,212,255,.03);border-top:1px solid var(--border)}
 .vault-ok{color:var(--green);font-family:var(--ff-title);font-weight:700}
 .vault-low{color:var(--red);font-family:var(--ff-title);font-weight:700}

@@ -29,6 +29,7 @@ namespace TheFallenWastes_Infrastructure
         public DbSet<BuildingUpgradeQueueItem> BuildingUpgradeQueueItems { get; set; }
         public DbSet<Operation> Operations { get; set; }
         public DbSet<PoiState> PoiStates { get; set; }
+        public DbSet<Siege> Sieges { get; set; }
 
         public DbSet<Alliance> Alliances { get; set; }
         public DbSet<AllianceMember> AllianceMembers { get; set; }
@@ -376,6 +377,26 @@ namespace TheFallenWastes_Infrastructure
             {
                 entity.HasKey(x => x.Id);
                 entity.Property(x => x.Content).IsRequired().HasMaxLength(5000);
+            });
+
+            // ----------------------------
+            // SIEGES
+            // ----------------------------
+
+            modelBuilder.Entity<Siege>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Status)
+                    .IsRequired()
+                    .HasMaxLength(30);
+
+                entity.Property(x => x.GarrisonUnitsJson)
+                    .HasColumnType("nvarchar(max)");
+
+                entity.HasIndex(x => new { x.SettlementId, x.Status });
+                entity.HasIndex(x => x.AttackerPlayerId);
+                entity.HasIndex(x => x.DefenderPlayerId);
             });
         }
     }

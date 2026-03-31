@@ -109,6 +109,20 @@ namespace TheFallenWastes_Domain.Entities
         }
 
         /// <summary>
+        /// Transfers ownership of this settlement to another player (conquest result).
+        /// Clears the defender's unit inventory. Buildings remain (may be degraded externally).
+        /// </summary>
+        public void TransferOwnership(Guid newOwnerPlayerId)
+        {
+            if (newOwnerPlayerId == Guid.Empty)
+                throw new ArgumentException("New owner PlayerId cannot be empty.", nameof(newOwnerPlayerId));
+            PlayerId = newOwnerPlayerId;
+            // Clear all remaining defender units
+            UnitInventory.Clear();
+            RecalculateUsedPopulation();
+        }
+
+        /// <summary>
         /// Returns total population capacity derived from Shelter level.
         /// </summary>
         public int GetPopulationCapacityFromBuildings()

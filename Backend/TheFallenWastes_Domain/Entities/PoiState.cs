@@ -6,6 +6,9 @@ namespace TheFallenWastes_Domain.Entities
 {
     public class PoiState
     {
+        /// <summary>Respawn timer in minutes. Configurable constant (default: 15 minutes).</summary>
+        public const int RespawnMinutes = 15;
+
         public Guid Id { get; private set; }
         public string PoiId { get; private set; }
         public bool IsCleared { get; private set; }
@@ -25,7 +28,7 @@ namespace TheFallenWastes_Domain.Entities
             Id = Guid.NewGuid();
             PoiId = poiId;
             IsCleared = false;
-            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+            NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
         }
 
         public void Initialize(string npcUnitsJson, string lootItemsJson)
@@ -39,7 +42,7 @@ namespace TheFallenWastes_Domain.Entities
         {
             IsCleared = true;
             ClearedAtUtc = DateTime.UtcNow;
-            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+            NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
         }
 
         public bool ShouldRespawn() => IsCleared && DateTime.UtcNow >= NextRespawnUtc;
@@ -51,7 +54,7 @@ namespace TheFallenWastes_Domain.Entities
             NpcUnitsJson = null;
             LootItemsJson = null;
             ClearedAtUtc = null;
-            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+            NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
         }
         public void TriggerRelocation()
         {
@@ -63,7 +66,7 @@ namespace TheFallenWastes_Domain.Entities
             ClearedAtUtc = null;
             IsRelocating = true;
             RelocatingAtUtc = DateTime.UtcNow;
-            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+            NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
         }
 
         /// <summary>
@@ -90,7 +93,7 @@ namespace TheFallenWastes_Domain.Entities
             ClearedAtUtc = null;
             IsRelocating = false;
             RelocatingAtUtc = null;
-            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+            NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
         }
 
         public void CompleteRelocation()
@@ -117,7 +120,7 @@ namespace TheFallenWastes_Domain.Entities
             {
                 IsCleared = true;
                 ClearedAtUtc = DateTime.UtcNow;
-                NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+                NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
             }
         }
 
