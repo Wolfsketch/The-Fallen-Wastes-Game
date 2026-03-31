@@ -307,6 +307,13 @@
               <span class="report-unit-qty report-qty--orange">-{{ qty }} killed</span>
             </div>
 
+            <div v-if="parsedReportBody.attackerWins && (parsedReportBody.attackPointsGained ?? 0) > 0"
+                 class="report-tp-row" style="margin-top:14px">
+              <span class="report-tp-icon">⚔</span>
+              <span class="report-tp-label">Attack Points earned:</span>
+              <span class="report-tp-value">+{{ parsedReportBody.attackPointsGained }}</span>
+            </div>
+
             <div v-if="parsedReportBody.lootCollected?.length" class="report-loot-box">
               <div class="report-section-title">LOOT COLLECTED</div>
               <div v-for="item in parsedReportBody.lootCollected" :key="item" class="report-loot-item">
@@ -543,9 +550,9 @@ function getMessageIcon(msg) {
   if (type === 'alliance_invite') return '◈'
   if (type === 'report' || type === 'notification') {
     if (subject.includes('scout')) return '👁'
-    if (subject.includes('battle') || subject.includes('attack') || subject.includes('raid')) return '⚔️'
+    if (subject.includes('battle') || subject.includes('attack') || subject.includes('raid') || subject.includes('victory') || subject.includes('defeat')) return '⚔️'
     if (subject.includes('vault') || subject.includes('raided')) return '🧬'
-    return '📋'
+    return null
   }
   return null
 }

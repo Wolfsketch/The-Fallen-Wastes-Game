@@ -70,6 +70,12 @@
                       {{ formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000))) }}
                     </div>
                   </div>
+                  <button
+                    class="movement-recall-btn"
+                    :disabled="Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000) <= 1"
+                    @click.stop="recallTroops(op)"
+                    title="Recall en route"
+                  >↩</button>
                 </div>
               </template>
 
@@ -87,6 +93,11 @@
                     <div class="movement-status status--arrived">●</div>
                     <div class="movement-time" style="color:var(--green)">ACTIVE</div>
                   </div>
+                  <button
+                    class="movement-recall-btn movement-recall-btn--return"
+                    @click.stop="recallTroops(op)"
+                    title="Return troops"
+                  >↩</button>
                 </div>
               </template>
 
@@ -151,10 +162,10 @@
     <div class="map-area" ref="mapCont" @mousedown="startPan" @mousemove="onPan" @mouseup="endPan" @mouseleave="endPan" @wheel.prevent="onWheel" @click="onClick">
       <canvas ref="cvs" class="map-cvs" />
       <div class="marker-layer" :class="{ 'marker-layer--panning': isPanning }" :style="{ transform: `translate(${panX}px,${panY}px) scale(${zoom})` }">
-        <div v-for="s in slots" :key="s.id" class="sm" :class="[`sm--${s.status}`, { sel: sel?.id === s.id }]" :style="{ left: (s.x - 12) + 'px', top: (s.y - 12) + 'px' }" @mouseenter="onMarkerEnter(s, 'slot', $event)" @mouseleave="onMarkerLeave" @mousemove="onMarkerMove">
+        <div v-for="s in slots" :key="s.id" class="sm" :class="[`sm--${s.status}`, { sel: sel?.id === s.id }]" :style="{ left: (s.x - 20) + 'px', top: (s.y - 20) + 'px' }" @click.stop="selectSlot(s)" @mouseenter="onMarkerEnter(s, 'slot', $event)" @mouseleave="onMarkerLeave" @mousemove="onMarkerMove">
           <div class="sm-ring">
-            <svg v-if="s.status !== 'empty'" viewBox="0 0 24 24" class="sm-house"><path d="M12 4L3 12h2.5v7h4.5v-4h4v4h4.5v-7H21L12 4z" fill="currentColor" /></svg>
-            <svg v-else viewBox="0 0 24 24" class="sm-house sm-house--empty"><path d="M12 4L3 12h2.5v7h4.5v-4h4v4h4.5v-7H21L12 4z" fill="currentColor" /></svg>
+            <img v-if="s.status !== 'empty'" src="../images/Settlement/Settlement.png" class="sm-house sm-house--img" alt="" />
+            <img v-else src="../images/Settlement/Settlement.png" class="sm-house sm-house--img sm-house--empty" alt="" />
           </div>
         </div>
         <div v-for="p in visiblePois" :key="p.id" class="poi" :class="[`poi--${p.type}`, { 'poi--active': arrivedPoiIds.has(p.id), 'poi--relocating': poiStates[p.id]?.isRelocating }]" :style="{ left: p.x + 'px', top: p.y + 'px' }" @click.stop="selectPoi(p)" @mouseenter="onMarkerEnter(p, 'poi', $event)" @mouseleave="onMarkerLeave" @mousemove="onMarkerMove">
@@ -258,7 +269,7 @@
           </template>
           <template v-if="sel.status === 'empty'">
             <div class="sp-d">Unclaimed location. Cost: 500 Scrap, 300 Food, 200 Fuel</div>
-            <div class="sa-w"><button class="sa sa--c">🏗 Claim</button></div>
+            <div class="sa-w"><button class="sa sa--c" @click="openClaimModal()">🏗 Claim</button></div>
           </template>
         </div>
       </div>
@@ -312,11 +323,11 @@
             <div v-if="!ownArrivedAtSelectedPoi && ownOutboundAtSelectedPoi" class="sa-w" style="margin-top:4px">
               <button class="sa sa--recall" @click="recallTroops(ownOutboundAtSelectedPoi)">↩ Recall En Route</button>
             </div>
-            <div class="sa-w" v-else>
+            <div class="sa-w" v-else-if="ownArrivedAtSelectedPoi">
               <button class="sa sa--s" @click="openScoutModal('poi')">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
               <button class="sa sa--reinforce" @click="openAttackModal('poi')">⛊ Reinforce</button>
               <button class="sa sa--recall" @click="recallTroops(ownArrivedAtSelectedPoi)">↩ Return Troops</button>
-              <div v-if="ownArrivedAtSelectedPoi.lootItemsEarned > 0"
+              <div v-if="ownArrivedAtSelectedPoi?.lootItemsEarned > 0"
                    style="font-size:10px;color:var(--green);font-family:var(--ff-title);padding:4px 8px;">
                 🧲 {{ ownArrivedAtSelectedPoi.lootItemsEarned }} loot collected
               </div>
@@ -590,6 +601,53 @@
         </div>
       </div>
     </div>
+
+    <!-- Claim sector toast -->
+    <transition name="wl-toast-fade">
+      <div v-if="wlToast.show" class="wl-toast" :class="`wl-toast--${wlToast.type}`">
+        {{ wlToast.message }}
+      </div>
+    </transition>
+
+    <!-- Claim / Found Outpost modal -->
+    <transition name="modal-fade">
+      <div v-if="claimModal.open" class="modal-backdrop" @click.self="claimModal.open = false">
+        <div class="wl-modal">
+          <div class="modal-header">
+            <span class="modal-title">🏗 CLAIM SECTOR — FOUND OUTPOST</span>
+            <button class="modal-close" @click="claimModal.open = false">✕</button>
+          </div>
+          <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:11px;color:var(--muted);line-height:1.5">
+              Claim this sector to establish a new outpost. Name your settlement, then confirm.
+            </div>
+            <div>
+              <div class="modal-label" style="margin-bottom:6px">OUTPOST NAME</div>
+              <input
+                class="modal-input"
+                style="width:100%;box-sizing:border-box"
+                v-model="claimModal.name"
+                placeholder="Enter outpost name (3–40 chars)"
+                maxlength="40"
+                @keyup.enter="confirmClaim"
+              />
+            </div>
+            <div style="font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px">
+              After founding, open the Wasteland map and use the sector to send a troop convoy and resources.
+            </div>
+            <div v-if="claimModal.error" class="modal-error-msg">{{ claimModal.error }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-cancel" @click="claimModal.open = false">CANCEL</button>
+            <button class="modal-confirm"
+              :disabled="claimModal.loading || claimModal.name.trim().length < 3"
+              @click="confirmClaim">
+              {{ claimModal.loading ? 'FOUNDING...' : '🏗 FOUND OUTPOST' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -597,7 +655,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
-import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates, recallOperation } from '../services/api.js'
+import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, getPoiStates, recallOperation, foundSettlement } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 const unitImages = import.meta.glob('../images/*.png', { eager: true, import: 'default' })
@@ -1289,6 +1347,57 @@ async function recallTroops(op) {
   }
 }
 
+// ── Claim sector ──────────────────────────────────────────────────────────────
+const claimModal = ref({ open: false, name: '', loading: false, error: '' })
+const wlToast = ref({ show: false, message: '', type: 'info' })
+let wlToastTimer = null
+
+function showWlToast(message, type = 'info', duration = 3500) {
+  if (wlToastTimer) clearTimeout(wlToastTimer)
+  wlToast.value = { show: true, message, type }
+  wlToastTimer = setTimeout(() => { wlToast.value.show = false }, duration)
+}
+
+function openClaimModal() {
+  const tp = props.player?.triumphPoints ?? 0
+  const needed = props.player?.triumphPointsForNextLevel ?? 3
+  const current = props.player?.settlements?.length ?? 1
+  const max = props.player?.maxSettlements ?? 1
+
+  if (current >= max) {
+    const missing = needed - tp
+    showWlToast(
+      missing > 0
+        ? `Not enough Triumph Points — you need ${missing} more TP to unlock a new outpost.`
+        : 'Conquest level required to found another outpost.',
+      'error'
+    )
+    return
+  }
+  claimModal.value = { open: true, name: '', loading: false, error: '' }
+}
+
+async function confirmClaim() {
+  const name = claimModal.value.name.trim()
+  if (name.length < 3) { claimModal.value.error = 'Name must be at least 3 characters.'; return }
+  if (!props.player?.id) { claimModal.value.error = 'Player data not available.'; return }
+
+  claimModal.value.loading = true
+  claimModal.value.error = ''
+  try {
+    await foundSettlement(props.player.id, name)
+    claimModal.value.open = false
+    showWlToast(`Outpost '${name}' founded! Head back to your Camp to manage it.`, 'success', 5000)
+    if (props.refreshSettlement) await props.refreshSettlement()
+    await reloadMap()
+  } catch (e) {
+    const msg = e?.response?.data?.message ?? e?.response?.data ?? 'Could not found outpost.'
+    claimModal.value.error = typeof msg === 'string' ? msg : JSON.stringify(msg)
+  } finally {
+    claimModal.value.loading = false
+  }
+}
+
 const viewX = computed(() => Math.round((-panX.value / zoom.value + cW.value / 2 / zoom.value) / 15))
 const viewY = computed(() => Math.round((-panY.value / zoom.value + cH.value / 2 / zoom.value) / 15))
 const minZoom = computed(() => Math.max(cW.value / WW, cH.value / WH))
@@ -1459,6 +1568,7 @@ function statusIcon(s) {
   return { yours: '⌂', ally: '♦', enemy: '⚔', neutral: '●', empty: '○' }[s] || '○'
 }
 function ownerColor(s) { return { enemy: 'ssv--e', neutral: 'ssv--n' }[s] || '' }
+function selectSlot(s) { selPoi.value = null; sel.value = s }
 function selectPoi(p) { sel.value = null; selPoi.value = p }
 
 let panFrame = null
@@ -1786,18 +1896,24 @@ onUnmounted(() => {
 .map-cvs{position:absolute;top:0;left:0;transform-origin:0 0;pointer-events:none;z-index:1;will-change:contents}
 .marker-layer{position:absolute;top:0;left:0;z-index:3;transform-origin:0 0;pointer-events:none;will-change:transform}
 .marker-layer--panning{pointer-events:none}
-.sm{position:absolute;width:28px;height:28px;pointer-events:auto}
+.sm{position:absolute;width:40px;height:40px;pointer-events:auto;cursor:pointer;transition:transform .15s}
+.sm:hover{transform:scale(1.35)}
 .sm-ring{width:100%;height:100%;border-radius:50%;border:1.5px solid transparent;display:flex;align-items:center;justify-content:center}
 .sm-house{width:14px;height:14px;display:block}
+.sm-house--img{width:28px;height:28px;object-fit:contain;image-rendering:pixelated;transition:transform .15s}
 .sm-house--empty{opacity:.3}
 .sm--yours .sm-ring{border-color:rgba(0,212,255,.8);box-shadow:0 0 10px rgba(0,212,255,.4),0 0 20px rgba(0,212,255,.15),inset 0 0 4px rgba(0,212,255,.15);background:rgba(0,10,20,.6)}
 .sm--yours .sm-house{color:#00e4ff;filter:drop-shadow(0 0 4px rgba(0,212,255,.6))}
+.sm--yours .sm-house--img{filter:drop-shadow(0 0 5px rgba(0,212,255,.8))}
 .sm--enemy .sm-ring{border-color:rgba(255,70,50,.6);box-shadow:0 0 8px rgba(255,70,50,.3),0 0 16px rgba(255,70,50,.1);background:rgba(20,0,0,.5)}
 .sm--enemy .sm-house{color:rgba(255,80,60,.95);filter:drop-shadow(0 0 4px rgba(0,0,0,.8))}
+.sm--enemy .sm-house--img{filter:drop-shadow(0 0 5px rgba(255,70,50,.7))}
 .sm--ally .sm-ring{border-color:rgba(180,128,255,.7);box-shadow:0 0 10px rgba(180,128,255,.35),0 0 20px rgba(180,128,255,.15),inset 0 0 4px rgba(180,128,255,.12);background:rgba(10,0,20,.6)}
 .sm--ally .sm-house{color:rgba(195,148,255,.98);filter:drop-shadow(0 0 4px rgba(180,128,255,.5))}
+.sm--ally .sm-house--img{filter:drop-shadow(0 0 5px rgba(180,128,255,.7))}
 .sm--neutral .sm-ring{border-color:rgba(255,200,60,.6);box-shadow:0 0 8px rgba(255,200,60,.3),0 0 16px rgba(255,200,60,.1);background:rgba(15,10,0,.5)}
 .sm--neutral .sm-house{color:rgba(255,210,70,.95);filter:drop-shadow(0 0 4px rgba(0,0,0,.8))}
+.sm--neutral .sm-house--img{filter:drop-shadow(0 0 5px rgba(255,200,60,.7))}
 .sm--empty .sm-ring{border:1.5px dashed rgba(0,140,180,.5);background:rgba(0,30,50,.55);box-shadow:0 0 8px rgba(0,140,180,.2)}
 .sm--empty .sm-house{color:rgba(0,160,200,.55);filter:drop-shadow(0 0 3px rgba(0,0,0,1))}
 .sm.sel .sm-ring{animation:sp 1.5s infinite}
@@ -2012,7 +2128,18 @@ onUnmounted(() => {
 .status--arrived{color:var(--green)}
 .status--returning{color:#ffc840}
 .movement-time{font-family:var(--ff-title);font-size:10px;color:var(--cyan);font-weight:700}
+.movement-recall-btn{flex-shrink:0;width:24px;height:24px;background:rgba(255,200,64,.1);border:1px solid rgba(255,200,64,.4);color:#ffc840;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .15s;margin-left:2px}
+.movement-recall-btn:hover:not(:disabled){background:rgba(255,200,64,.25);border-color:#ffc840}
+.movement-recall-btn:disabled{opacity:.35;cursor:not-allowed}
+.movement-recall-btn--return{background:rgba(61,255,156,.08);border-color:rgba(61,255,156,.35);color:#3dff9c}
+.movement-recall-btn--return:hover:not(:disabled){background:rgba(61,255,156,.2);border-color:#3dff9c}
 .tb-planner-btn{border-color:rgba(255,200,64,.4);color:#ffc840;background:rgba(255,200,64,.06);font-size:10px;letter-spacing:1px}
 .tb-planner-btn:hover{background:rgba(255,200,64,.15)}
 .wl-modal--wide{max-width:480px !important;width:94vw !important}
+.wl-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border-bright);color:var(--text);font-family:var(--ff-title);font-size:11px;letter-spacing:1px;padding:10px 20px;pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;white-space:normal;text-align:center}
+.wl-toast--error{border-color:var(--red,#ff4444);color:var(--red,#ff4444);background:rgba(255,68,68,.08)}
+.wl-toast--success{border-color:var(--green,#3dff9c);color:var(--green,#3dff9c);background:rgba(61,255,156,.06)}
+.wl-toast-fade-enter-active,.wl-toast-fade-leave-active{transition:opacity .3s,transform .3s}
+.wl-toast-fade-enter-from{opacity:0;transform:translateX(-50%) translateY(10px)}
+.wl-toast-fade-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
 </style>

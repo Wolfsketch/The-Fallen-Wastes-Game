@@ -66,6 +66,33 @@ namespace TheFallenWastes_Domain.Entities
             NextRespawnUtc = DateTime.UtcNow.AddHours(12);
         }
 
+        /// <summary>
+        /// Begins a 15-minute relocation warning window.
+        /// Content is still visible but no new operations are allowed.
+        /// </summary>
+        public void StartRelocationWarning(int warningMinutes = 15)
+        {
+            IsRelocating = true;
+            RelocatingAtUtc = DateTime.UtcNow.AddMinutes(warningMinutes);
+        }
+
+        /// <summary>
+        /// Called after the warning window expires.
+        /// Resets content, increments seed, and ends the relocating state.
+        /// </summary>
+        public void FinalizeRelocation()
+        {
+            GenerationSeed += 1;
+            IsCleared = false;
+            IsInitialized = false;
+            NpcUnitsJson = null;
+            LootItemsJson = null;
+            ClearedAtUtc = null;
+            IsRelocating = false;
+            RelocatingAtUtc = null;
+            NextRespawnUtc = DateTime.UtcNow.AddHours(12);
+        }
+
         public void CompleteRelocation()
         {
             IsRelocating = false;

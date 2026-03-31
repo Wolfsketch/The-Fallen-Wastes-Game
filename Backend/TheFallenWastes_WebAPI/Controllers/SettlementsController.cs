@@ -1415,6 +1415,84 @@ namespace TheFallenWastes_WebAPI.Controllers
                 DefenseValue = BuildingDefinitions.GetDefenseValue(b.Type, b.Level)
             };
         }
+
+        // ── Salvage inventory ──────────────────────────────────────────────
+        [HttpGet("{id}/salvage")]
+        public async Task<IActionResult> GetSalvageInventory(Guid id)
+        {
+            var inv = await _db.SettlementSalvageInventories
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.SettlementId == id);
+
+            if (inv == null)
+                return Ok(new { items = Array.Empty<object>(), storedRareTech = 0 });
+
+            return Ok(new
+            {
+                items = inv.GetAllItems().Select(i => new
+                {
+                    i.Key,
+                    i.Name,
+                    i.Description,
+                    i.SourceType,
+                    i.Rarity,
+                    i.Quantity,
+                    i.RequiredTechSalvagerLevel,
+                    i.BaseSalvageTimeSeconds,
+                    i.RareTechYield,
+                    i.ResearchDataYield,
+                    i.SpecialOutputKey,
+                    i.AcquiredAtUtc
+                }),
+                storedRareTech = inv.StoredRareTech
+            });
+        }
+
+        [HttpPost("{id}/salvage/process")]
+        public async Task<IActionResult> ProcessSalvageItem(Guid id, [FromBody] ProcessSalvageRequest request)
+        {
+            var settlement = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == id);
+            if (settlement == null) return NotFound("Settlement not found.");
+
+            var inv = await _db.SettlementSalvageInventories
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.SettlementId == id);
+            if (inv == null) return NotFound("No salvage inventory found for this settlement.");
+
+            var item = inv.GetByKey(request.ItemKey);
+            if (item == null) return BadRequest("Salvage item not found.");
+
+            int qty = Math.Max(1, request.Quantity);
+            if (item.Quantity < qty) return BadRequest($"Not enough quantity. Have {item.Quantity}, requested {qty}.");
+
+            int rareTechGained = item.RareTechYield * qty;
+            int researchDataGained = item.ResearchDataYield * qty;
+
+            inv.RemoveItem(request.ItemKey, qty);
+
+            if (rareTechGained > 0)
+            {
+                settlement.DepositToVault(rareTechGained);
+                _db.Entry(settlement).Property(s => s.VaultRareTech).IsModified = true;
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                rareTechGained,
+                researchDataGained,
+                message = $"Processed {qty}x {item.Name}. Gained {rareTechGained} RT."
+            });
+        }
+    }
+
+    public class ProcessSalvageRequest
+    {
+        public string ItemKey { get; set; } = string.Empty;
+        public int Quantity { get; set; } = 1;
     }
 
     public class UpgradeBuildingRequest

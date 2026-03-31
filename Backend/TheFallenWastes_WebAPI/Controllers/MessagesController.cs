@@ -93,12 +93,12 @@ namespace TheFallenWastes_WebAPI.Controllers
         [HttpPost("mark-read/{messageId}")]
         public async Task<IActionResult> MarkAsRead(Guid messageId)
         {
-            var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == messageId);
-            if (message == null)
-                return NotFound("Message not found.");
+            int updated = await _db.Messages
+                .Where(m => m.Id == messageId)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsRead, true));
 
-            message.MarkAsRead();
-            await _db.SaveChangesAsync();
+            if (updated == 0)
+                return NotFound("Message not found.");
 
             return Ok(new { Message = "Marked as read." });
         }
@@ -106,12 +106,12 @@ namespace TheFallenWastes_WebAPI.Controllers
         [HttpPost("mark-unread/{messageId}")]
         public async Task<IActionResult> MarkAsUnread(Guid messageId)
         {
-            var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == messageId);
-            if (message == null)
-                return NotFound("Message not found.");
+            int updated = await _db.Messages
+                .Where(m => m.Id == messageId)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsRead, false));
 
-            message.MarkAsUnread();
-            await _db.SaveChangesAsync();
+            if (updated == 0)
+                return NotFound("Message not found.");
 
             return Ok(new { success = true });
         }

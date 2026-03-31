@@ -363,7 +363,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                     _ => p.Score
                 },
                 RankChange = 0
-            });
+            }).ToList();
 
             return Ok(result);
         }

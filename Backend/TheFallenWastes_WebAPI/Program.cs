@@ -12,8 +12,12 @@ namespace TheFallenWastes_WebAPI
 
             builder.Services.AddControllers()
                 .AddJsonOptions(opts =>
+                {
                     opts.JsonSerializerOptions.Converters.Add(
-                        new System.Text.Json.Serialization.JsonStringEnumConverter()));
+                        new System.Text.Json.Serialization.JsonStringEnumConverter());
+                    opts.JsonSerializerOptions.ReferenceHandler =
+                        System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                });
 
             builder.Services.AddScoped<PlayerDataMigrationService>();
 

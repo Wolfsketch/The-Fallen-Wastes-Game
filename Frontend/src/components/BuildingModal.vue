@@ -5,7 +5,10 @@
 
       <div class="modal-body">
         <div class="modal-header">
-          <span class="modal-icon">{{ icon }}</span>
+          <span class="modal-icon">
+            <img v-if="buildingImage" :src="buildingImage" class="modal-icon-img" />
+            <span v-else>{{ icon }}</span>
+          </span>
 
           <div class="modal-header-main">
             <div class="modal-name">{{ building.displayName }}</div>
@@ -49,6 +52,21 @@
             <div v-if="building.defenseValue > 0" class="modal-effect-item">
               <span class="modal-effect-label">DEFENSE</span>
               <span class="modal-effect-value">{{ building.defenseValue }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="nextLevelGains.length > 0" class="modal-next-box">
+          <div class="modal-section-title">NEXT LEVEL GAINS</div>
+          <div class="modal-next-grid">
+            <div v-for="g in nextLevelGains" :key="g.label" class="modal-next-item">
+              <span class="modal-next-label">{{ g.label }}</span>
+              <div class="modal-next-vals">
+                <span class="modal-next-cur">{{ g.current }}</span>
+                <span class="modal-next-arrow">→</span>
+                <span class="modal-next-nxt">{{ g.next }}</span>
+                <span class="modal-next-delta">({{ g.delta }})</span>
+              </div>
             </div>
           </div>
         </div>
@@ -140,6 +158,29 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { upgradeBuilding, instantFinishBuilding } from '../services/api.js'
+import HQIcon from '../images/BuildingIcons/Headquarter.png'
+import ShelterIcon from '../images/BuildingIcons/Shelter.png'
+import CouncilHallIcon from '../images/BuildingIcons/council hall.png'
+import BarracksIcon from '../images/BuildingIcons/Barracks.png'
+import PerimeterWallIcon from '../images/BuildingIcons/PerimeterWall.png'
+import GarageIcon from '../images/BuildingIcons/Garage.png'
+import CommandoCenterIcon from '../images/BuildingIcons/Commando Center.png'
+import FuelRefineryIcon from '../images/BuildingIcons/Fuel Refinery.png'
+import FarmDomeIcon from '../images/BuildingIcons/Farm Dome.png'
+import ScrapForgeIcon from '../images/BuildingIcons/ScrapForge.png'
+import WaterPurifierIcon from '../images/BuildingIcons/WaterPurifier.png'
+import SolarArrayIcon from '../images/BuildingIcons/SolarArray.png'
+import RelicVaultIcon from '../images/BuildingIcons/RelicVault.png'
+import WorkshopIcon from '../images/BuildingIcons/Workshop.png'
+import FoodSiloIcon from '../images/BuildingIcons/FoodSilo.png'
+import FuelDepotIcon from '../images/BuildingIcons/FuelDepot.png'
+import PowerBankIcon from '../images/BuildingIcons/PowerBank.png'
+import ScrapVaultIcon from '../images/BuildingIcons/ScrapVault.png'
+import WaterTankIcon from '../images/BuildingIcons/WaterTank.png'
+import TechVaultIcon from '../images/BuildingIcons/TechVault.png'
+import WatchTowerIcon from '../images/BuildingIcons/WatchTower.png'
+import TechLabIcon from '../images/BuildingIcons/TechLab.png'
+import TechSalvagerIcon from '../images/BuildingIcons/TechSalvager.png'
 
 const props = defineProps({
   building: { type: Object, required: true },
@@ -205,6 +246,35 @@ const ICONS = {
 }
 
 const icon = computed(() => ICONS[props.building.type] || '🏗️')
+
+const BUILDING_IMAGES = {
+  // ── Available ────────────────────────────────────────────
+  HeadQuarter: HQIcon,
+  Shelter: ShelterIcon,
+  CouncilHall: CouncilHallIcon,
+  Barracks: BarracksIcon,
+  PerimeterWall: PerimeterWallIcon,
+  Garage: GarageIcon,
+  CommandCenter: CommandoCenterIcon,
+  FuelRefinery: FuelRefineryIcon,
+  FarmDome: FarmDomeIcon,
+  ScrapForge: ScrapForgeIcon,
+  WaterPurifier: WaterPurifierIcon,
+  SolarArray: SolarArrayIcon,
+  RaidVault: RelicVaultIcon,
+  Workshop: WorkshopIcon,
+  FoodSilo: FoodSiloIcon,
+  FuelDepot: FuelDepotIcon,
+  PowerBank: PowerBankIcon,
+  ScrapVault: ScrapVaultIcon,
+  WaterTank: WaterTankIcon,
+  TechVault: TechVaultIcon,
+  WatchTower: WatchTowerIcon,
+  TechLab: TechLabIcon,
+  TechSalvager: TechSalvagerIcon,
+}
+const buildingImage = computed(() => BUILDING_IMAGES[props.building.type] || null)
+
 const isQueueFull = computed(() => props.queueActive >= props.queueLimit)
 const canShowNextLevel = computed(() => !props.building.isFutureFeature && props.building.level < 30)
 
@@ -232,6 +302,75 @@ const currentProdText = computed(() => {
   if (p.energy) parts.push(`+${p.energy} ⚡`)
   if (p.rareTech) parts.push(`+${p.rareTech} 🧬`)
   return parts.join('  ') + ' /h'
+})
+
+const nextLevelGains = computed(() => {
+  const b = props.building
+  const type = b.type
+  const lvl = b.level
+  const next = lvl + 1
+  if (b.isFutureFeature || next > 30 || !b.canUpgrade) return []
+
+  const gains = []
+
+  const PROD_MAP = {
+    FarmDome: '🌾 Food /h', FuelRefinery: '⛽ Fuel /h',
+    ScrapForge: '⚙️ Scrap /h', WaterPurifier: '💧 Water /h', SolarArray: '⚡ Energy /h',
+  }
+  if (PROD_MAP[type]) {
+    const calc = l => l <= 0 ? 0 : Math.round(23 * l * Math.pow(1.12, l - 1))
+    const cur = calc(lvl); const nxt = calc(next)
+    gains.push({ label: PROD_MAP[type], current: cur > 0 ? `+${cur.toLocaleString()}` : '—', next: `+${nxt.toLocaleString()}`, delta: `+${(nxt - cur).toLocaleString()}` })
+  }
+
+  const STORE_MAP = {
+    WaterTank: '💧 Water storage', FoodSilo: '🌾 Food storage',
+    ScrapVault: '⚙️ Scrap storage', FuelDepot: '⛽ Fuel storage', PowerBank: '⚡ Energy storage',
+  }
+  if (STORE_MAP[type]) {
+    const calc = l => l <= 0 ? 0 : 1000 + ((l - 1) * 900)
+    gains.push({ label: STORE_MAP[type], current: calc(lvl).toLocaleString(), next: calc(next).toLocaleString(), delta: '+900' })
+  }
+
+  if (type === 'TechVault') {
+    const calc = l => l <= 0 ? 0 : 200 + ((l - 1) * 180)
+    gains.push({ label: '🧬 RareTech storage', current: calc(lvl).toLocaleString(), next: calc(next).toLocaleString(), delta: '+180' })
+  }
+
+  if (type === 'RaidVault') {
+    const curVal = lvl >= 10 ? '∞' : (lvl * 100).toLocaleString()
+    const nxtVal = next >= 10 ? '∞ (unlimited)' : (next * 100).toLocaleString()
+    gains.push({ label: '📦 Loot capacity', current: curVal, next: nxtVal, delta: next >= 10 ? '→ ∞' : '+100' })
+  }
+
+  if (type === 'PerimeterWall') {
+    const calc = l => l <= 0 ? 0 : Math.round(35 * l * Math.pow(1.11, l - 1))
+    const cur = calc(lvl); const nxt = calc(next)
+    gains.push({ label: '🛡️ Defense strength', current: cur.toLocaleString(), next: nxt.toLocaleString(), delta: `+${(nxt - cur).toLocaleString()}` })
+  }
+
+  if (type === 'Shelter') {
+    const calc = l => l <= 0 ? 0 : 200 + (35 * (l - 1)) + (6 * (l - 1) * (l - 1))
+    const cur = calc(lvl); const nxt = calc(next)
+    gains.push({ label: '👥 Population cap', current: cur.toLocaleString(), next: nxt.toLocaleString(), delta: `+${(nxt - cur).toLocaleString()}` })
+  }
+
+  if (['Barracks', 'Garage', 'Workshop', 'CommandCenter'].includes(type)) {
+    const calc = l => l <= 0 ? 0 : (l - 1) * 5
+    gains.push({ label: '⚡ Train speed bonus', current: `+${calc(lvl)}%`, next: `+${calc(next)}%`, delta: '+5%' })
+  }
+
+  if (type === 'HeadQuarter') {
+    const calc = l => Math.min(45, l * 1.5)
+    const cur = calc(lvl); const nxt = calc(next)
+    gains.push({ label: '🔨 Build time reduction', current: `-${cur.toFixed(1)}%`, next: `-${nxt.toFixed(1)}%`, delta: `+${(nxt - cur).toFixed(1)}%` })
+  }
+
+  if (type === 'TechLab') {
+    gains.push({ label: '🔬 Research speed', current: `+${lvl * 5}%`, next: `+${next * 5}%`, delta: '+5%' })
+  }
+
+  return gains
 })
 
 const availableResources = computed(() => {
@@ -371,15 +510,18 @@ async function doUpgrade() {
 
 .modal-header {
   display: flex;
-  gap: 14px;
-  align-items: center;
+  gap: 16px;
+  align-items: flex-start;
   margin-bottom: 20px;
 }
 .modal-header-main {
   min-width: 0;
+  flex: 1;
 }
 .modal-icon {
-  font-size: 36px;
+  font-size: 52px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 .modal-name {
   font-size: 16px;
@@ -619,4 +761,24 @@ async function doUpgrade() {
   background: linear-gradient(180deg, rgba(61,255,156,.28), rgba(61,255,156,.14));
   box-shadow: 0 0 24px rgba(61,255,156,.3);
 }
+
+/* ── Building image icon ───────────────────────────────── */
+.modal-icon { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; flex-shrink: 0; overflow: hidden; }
+.modal-icon-img { width: 100%; height: 100%; object-fit: contain; transform: scale(1); }
+
+/* ── Next Level Gains ──────────────────────────────────── */
+.modal-next-box {
+  margin-bottom: 16px;
+  border: 1px solid rgba(0,212,255,.15);
+  background: rgba(0,212,255,.03);
+  padding: 12px 14px;
+}
+.modal-next-grid { display: flex; flex-direction: column; gap: 7px; }
+.modal-next-item { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; }
+.modal-next-label { font-size: 10px; color: var(--text); }
+.modal-next-vals { display: flex; align-items: center; gap: 5px; }
+.modal-next-cur { font-size: 10px; color: var(--muted); font-family: var(--ff-title); letter-spacing: .5px; }
+.modal-next-arrow { font-size: 9px; color: var(--cyan-dark); }
+.modal-next-nxt { font-size: 11px; color: var(--cyan); font-family: var(--ff-title); font-weight: 700; letter-spacing: .5px; }
+.modal-next-delta { font-size: 8px; color: var(--green); font-family: var(--ff-title); letter-spacing: .5px; }
 </style>

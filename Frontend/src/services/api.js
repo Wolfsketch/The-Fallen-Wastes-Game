@@ -432,4 +432,14 @@ export async function setAllianceMemberPermissions(allianceId, targetPlayerId, r
     return response.data
 }
 
+export async function getSalvageInventory(settlementId) {
+    const response = await api.get(`/Settlements/${settlementId}/salvage`)
+    return response.data
+}
+
+export async function processSalvageItem(settlementId, itemKey, quantity = 1) {
+    const response = await api.post(`/Settlements/${settlementId}/salvage/process`, { itemKey, quantity })
+    return response.data
+}
+
 export default api

@@ -426,7 +426,9 @@ import {
   startResearch,
   cancelResearch,
   completeReadyResearch,
-  activateAdvisor
+  activateAdvisor,
+  getSalvageInventory,
+  processSalvageItem
 } from '../services/api'
 
 const props = defineProps({
@@ -450,48 +452,48 @@ let tickInterval = null
 const activeTab = ref('lab')
 const showResearchCommanderInfo = ref(false)
 
-const salvageItems = ref([
-  {
-    key: 'encrypted_datacore',
-    name: 'Encrypted Datacore',
-    description: 'Recovered archive core containing fragmented pre-fall technical records.',
-    category: 'Datacore',
-    rarity: 'rare',
-    quantity: 2,
-    salvageYield: 8,
-    icon: '💾'
-  },
-  {
-    key: 'prototype_schematic',
-    name: 'Prototype Schematic',
-    description: 'A damaged blueprint fragment for advanced military engineering.',
-    category: 'Schematic',
-    rarity: 'epic',
-    quantity: 1,
-    salvageYield: 16,
-    icon: '📐'
-  },
-  {
-    key: 'reactor_fragment',
-    name: 'Reactor Fragment',
-    description: 'Unstable power shard recovered from a collapsed industrial zone.',
-    category: 'Fragment',
-    rarity: 'rare',
-    quantity: 3,
-    salvageYield: 5,
-    icon: '⚛️'
-  },
-  {
-    key: 'vault_artifact',
-    name: 'Vault Artifact',
-    description: 'Intact pre-fall relic extracted from a sealed underground vault.',
-    category: 'Artifact',
-    rarity: 'legendary',
-    quantity: 1,
-    salvageYield: 24,
-    icon: '✦'
+const salvageItems = ref([])
+
+function mapSalvageItem(i) {
+  const key = (i.key ?? i.Key ?? '').toLowerCase()
+  const name = i.name ?? i.Name ?? key
+
+  // Derive category from key
+  let category = 'Component'
+  if (key.includes('datacore')) category = 'Datacore'
+  else if (key.includes('schematic')) category = 'Schematic'
+  else if (key.includes('fragment')) category = 'Fragment'
+  else if (key.includes('artifact')) category = 'Artifact'
+
+  // Derive icon from key
+  const iconMap = {
+    encrypted_datacore: '💾',
+    ancient_data_core: '💽',
+    prototype_schematic: '📐',
+    reactor_fragment: '⚛️',
+    vault_artifact: '✦',
+    cracked_circuit_board: '📟',
+    burned_power_cell: '🔋',
+    scrap_bundle: '🔩',
+    fractured_optics_module: '🔭',
+    damaged_servo_bundle: '⚙️',
+    broken_drone_core: '🤖',
+    pre_war_guidance_chip: '🧭',
   }
-])
+  const icon = iconMap[key] ?? '🔬'
+
+  return {
+    key,
+    name,
+    description: i.description ?? i.Description ?? '',
+    category,
+    rarity: (i.rarity ?? i.Rarity ?? 'common').toLowerCase(),
+    quantity: i.quantity ?? i.Quantity ?? 0,
+    salvageYield: i.rareTechYield ?? i.RareTechYield ?? 0,
+    baseSalvageTimeSeconds: i.baseSalvageTimeSeconds ?? i.BaseSalvageTimeSeconds ?? 120,
+    icon
+  }
+}
 
 const selectedSalvageKey = ref('')
 const salvageQuantity = ref(1)
@@ -725,13 +727,19 @@ async function fetchResearchData() {
   if (!props.settlement?.id) return
 
   try {
-    const [buildingsData, researchData] = await Promise.all([
+    const [buildingsData, researchData, salvageData] = await Promise.all([
       getBuildings(props.settlement.id),
-      getResearchState(props.settlement.id)
+      getResearchState(props.settlement.id),
+      getSalvageInventory(props.settlement.id).catch(() => null)
     ])
 
     buildings.value = (buildingsData || []).map(normalizeBuilding)
     researchState.value = normalizeResearchState(researchData)
+
+    if (salvageData?.items) {
+      salvageItems.value = salvageData.items.map(mapSalvageItem).filter(i => i.quantity > 0)
+    }
+
     ensureSelectedSalvage()
     error.value = ''
   } catch (err) {
@@ -787,17 +795,21 @@ async function activateResearchCommander() {
   }
 }
 
-function processSelectedSalvage() {
-  if (!selectedSalvage.value) return
+async function processSelectedSalvage() {
+  if (!selectedSalvage.value || !props.settlement?.id) return
 
   const item = selectedSalvage.value
   const amount = Math.min(salvageQuantity.value, item.quantity)
-
   if (amount <= 0) return
 
-  item.quantity -= amount
-  salvageQuantity.value = 1
-  ensureSelectedSalvage()
+  try {
+    await processSalvageItem(props.settlement.id, item.key, amount)
+    salvageQuantity.value = 1
+    await fetchResearchData()
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (err) {
+    error.value = err?.response?.data || 'Failed to process salvage item.'
+  }
 }
 
 onMounted(async () => {

@@ -16,7 +16,7 @@
       <!-- Settlement Switcher -->
       <div class="tb-sett" ref="settlementMenuRef">
         <button class="tb-sett-btn" @click="settlementMenuOpen = !settlementMenuOpen">
-          <span class="tb-sett-icon">🏚️</span>
+          <span class="tb-sett-icon"><img src="../images/Settlement/Settlement start.png" class="tb-sett-icon-img" alt="sett" /></span>
           <span class="tb-sett-name">{{ settlement?.name ?? '...' }}</span>
           <span class="tb-sett-arr">{{ settlementMenuOpen ? '▲' : '▼' }}</span>
         </button>
@@ -79,7 +79,10 @@
     <div class="game-body">
       <nav class="sidebar">
         <div class="sidebar-header">
-          <div class="sidebar-settlement-icon">🏚️</div>
+          <div class="sidebar-settlement-icon" @click="showSettlementModal = true">
+            <img src="../images/Settlement/Settlement start.png" alt="Settlement" class="sidebar-settlement-img" />
+            <span class="sett-zoom-hint">&#128269;</span>
+          </div>
           <div class="sidebar-settlement-info">
             <div class="sidebar-settlement">{{ settlement?.name ?? 'Loading...' }}</div>
             <div class="sidebar-coords">
@@ -132,6 +135,18 @@
               {{ unreadMessagesCount }}
             </span>
           </router-link>
+
+          <div class="nav-group-label">Support</div>
+          <router-link
+              v-for="item in navSupport"
+              :key="item.route"
+              :to="item.route"
+              class="nav-item"
+              :class="{ 'nav-item--active': $route.name === item.name }"
+          >
+            <div class="nav-icon" v-html="item.svg" />
+            <span class="nav-label">{{ item.label }}</span>
+          </router-link>
         </div>
 
         <div class="sidebar-footer">
@@ -156,6 +171,16 @@
         />
       </main>
     </div>
+
+    <!-- Settlement image modal -->
+    <Teleport to="body">
+      <div v-if="showSettlementModal" class="sett-modal-overlay" @click="showSettlementModal = false">
+        <div class="sett-modal-box" @click.stop>
+          <button class="sett-modal-close" @click="showSettlementModal = false">&#10005;</button>
+          <img src="../images/Settlement/Settlement start.png" class="sett-modal-img" alt="Settlement" />
+        </div>
+      </div>
+    </Teleport>
   </div>
 
   <div v-else class="loading-screen">
@@ -182,6 +207,7 @@ const settlement = ref(null)
 const allSettlements = ref([])
 const settlementMenuOpen = ref(false)
 const settlementMenuRef = ref(null)
+const showSettlementModal = ref(false)
 const time = ref(new Date())
 const unreadMessagesCount = ref(0)
 const underAttack = ref(false)
@@ -210,6 +236,8 @@ const icons = {
   alliance: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 18c0-3 2.5-5 5-5s5 2 5 5"/><path d="M11 18c0-3 2.5-5 5-5s5 2 5 5"/></svg>`,
   messages: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M2 4l10 8 10-8"/></svg>`,
   ranking: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 9H2v12h4V9zM14 4h-4v17h4V4zM22 13h-4v8h4v-8z"/></svg>`,
+  report: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>`,
+  documentation: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
 }
 
 const navMain = [
@@ -228,6 +256,11 @@ const navWorld = [
   { route: '/game/alliance', name: 'alliance', label: 'Alliance', svg: icons.alliance },
   { route: '/game/messages', name: 'messages', label: 'Messages', svg: icons.messages },
   { route: '/game/ranking', name: 'ranking', label: 'Ranking', svg: icons.ranking },
+]
+
+const navSupport = [
+  { route: '/game/report', name: 'report', label: 'Report', svg: icons.report },
+  { route: '/game/documentation', name: 'documentation', label: 'Documentation', svg: icons.documentation },
 ]
 
 const timeStr = computed(() => time.value.toLocaleTimeString('en-GB'))
@@ -781,7 +814,7 @@ onUnmounted(() => {
 
 .resource-rate {
   font-size: 8px;
-  color: var(--cyan-dim);
+  color: var(--cyan-dark);
 }
 
 .resource-values {
@@ -838,16 +871,36 @@ onUnmounted(() => {
 }
 
 .sidebar-settlement-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--bg3), var(--bg));
-  border: 1px solid var(--border-bright);
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
   flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+}
+
+.sidebar-settlement-img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.sett-zoom-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  background: rgba(0,0,0,.55);
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.sidebar-settlement-icon:hover .sett-zoom-hint {
+  opacity: 1;
 }
 
 .sidebar-settlement-info {
@@ -1022,7 +1075,14 @@ onUnmounted(() => {
 }
 
 .tb-sett-icon {
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.tb-sett-icon-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
 }
 
 .tb-sett-name {
@@ -1105,5 +1165,51 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 8px rgba(0,212,255,.12);
+}
+
+/* Settlement image modal */
+.sett-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+.sett-modal-box {
+  position: relative;
+  background: var(--bg2, #111);
+  border: 1px solid rgba(0,212,255,.35);
+  border-radius: 8px;
+  padding: 32px;
+  cursor: default;
+  box-shadow: 0 8px 40px rgba(0,0,0,.9);
+}
+
+.sett-modal-img {
+  display: block;
+  width: 320px;
+  height: 320px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.sett-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--muted, #666);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.sett-modal-close:hover {
+  color: var(--cyan, #00d4ff);
 }
 </style>

@@ -267,18 +267,16 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 string attackerLossText = attackerLosses.Any()
                                     ? string.Join(", ", attackerLosses.Select(u => $"{u.Value}x {u.Key}"))
                                     : "none";
-                                string npcLossText = npcLosses.Any()
-                                    ? string.Join(", ", npcLosses.Select(u => $"{u.Value}x {u.Key}"))
-                                    : "none";
-                                var lootCollected = attackerWins && raidPoiState.LootItemsJson != null
-                                    ? JsonSerializer.Deserialize<List<string>>(raidPoiState.LootItemsJson) ?? new List<string>()
-                                    : new List<string>();
+                                int attackPointsGainedPoi = attackerWins ? npcLosses.Values.Sum() : 0;
                                 _db.Messages.Add(new Message(
                                     senderPlayerId: raidAttackerPlayer.Id,
                                     receiverPlayerId: raidAttackerPlayer.Id,
-                                    subject: $"Battle Report \u2014 {op.TargetPoiLabel ?? op.TargetPoiId}",
+                                    subject: attackerWins
+                                        ? $"\u2694 Victory \u2014 {op.TargetPoiLabel ?? op.TargetPoiId}"
+                                        : $"\u2717 Defeat \u2014 {op.TargetPoiLabel ?? op.TargetPoiId}",
                                     body: JsonSerializer.Serialize(new
                                     {
+                                        isPoiBattleReport = true,
                                         poiName = op.TargetPoiLabel ?? op.TargetPoiId,
                                         attackerWins,
                                         attackerSentUnits,
@@ -286,7 +284,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                                         attackerSurvived = survivingAttackerUnits,
                                         npcLosses,
                                         remainingNpcUnits = remainingNpcAfterBattle,
-                                        lootCollected
+                                        raidMode = op.RaidMode,
+                                        lootPendingReturn = attackerWins,
+                                        attackPointsGained = attackPointsGainedPoi
                                     }),
                                     messageType: "report"));
 
@@ -653,6 +653,55 @@ namespace TheFallenWastes_WebAPI.Controllers
                             catch { /* ignore parse errors — op still completes */ }
                         }
                     }
+
+                    // ── POI raid: add earned loot to Salvage Inventory on return ──
+                    if (op.OperationType == "raid_poi" && op.LootItemsCollected > 0)
+                    {
+                        try
+                        {
+                            var poiStateForLoot = await _db.PoiStates
+                                .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
+                            if (poiStateForLoot != null && !string.IsNullOrEmpty(poiStateForLoot.LootItemsJson))
+                            {
+                                var lootPool = JsonSerializer.Deserialize<List<string>>(poiStateForLoot.LootItemsJson)
+                                    ?? new List<string>();
+                                int toTake = Math.Min(op.LootItemsCollected, lootPool.Count);
+                                var earnedItems = lootPool.Take(toTake).ToList();
+
+                                if (earnedItems.Count > 0)
+                                {
+                                    var salvageInv = await _db.SettlementSalvageInventories
+                                        .Include(i => i.Items)
+                                        .FirstOrDefaultAsync(i => i.SettlementId == op.AttackerSettlementId);
+                                    if (salvageInv == null)
+                                    {
+                                        salvageInv = new SettlementSalvageInventory(op.AttackerSettlementId);
+                                        _db.SettlementSalvageInventories.Add(salvageInv);
+                                    }
+
+                                    foreach (var itemName in earnedItems)
+                                    {
+                                        var meta = GetSalvageItemMetadata(itemName);
+                                        salvageInv.AddItem(
+                                            key: meta.Key,
+                                            name: meta.Name,
+                                            description: meta.Description,
+                                            sourceType: "poi",
+                                            rarity: meta.Rarity,
+                                            quantity: 1,
+                                            requiredTechSalvagerLevel: meta.RequiredLevel,
+                                            baseSalvageTimeSeconds: meta.SalvageTimeSeconds,
+                                            rareTechYield: meta.RareTechYield,
+                                            researchDataYield: 0,
+                                            specialOutputKey: null);
+                                        poiStateForLoot.RemoveLootItem(itemName);
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* salvage transfer is non-critical */ }
+                    }
+
                     op.MarkCompleted(op.ResultJson ?? "{}");
                 }
             }
@@ -660,7 +709,8 @@ namespace TheFallenWastes_WebAPI.Controllers
             await _db.SaveChangesAsync();
 
             // ── POI Relocation check ──────────────────────────────────────────
-            // Every 12 h, if a POI has no players present or inbound, relocate it.
+            // Only fully-cleared POIs trigger a 15-min warning then relocate.
+            // Partially-raided POIs stay until fully cleared + troops gone.
             var allPoiStates = await _db.PoiStates.ToListAsync();
             var allActiveOps = await _db.Operations
                 .Where(o => o.Phase == "outbound" || o.Phase == "arrived")
@@ -669,29 +719,29 @@ namespace TheFallenWastes_WebAPI.Controllers
             bool relocationsTriggered = false;
             foreach (var poiState in allPoiStates)
             {
-                // Complete the 3-second grace period for any already-relocating POI
+                // After 15-min warning expires: finalize (clear content + reset seed)
                 if (poiState.IsRelocating && poiState.RelocatingAtUtc.HasValue &&
-                    (DateTime.UtcNow - poiState.RelocatingAtUtc.Value).TotalSeconds >= 3)
+                    DateTime.UtcNow >= poiState.RelocatingAtUtc.Value)
                 {
-                    poiState.CompleteRelocation();
+                    poiState.FinalizeRelocation();
                     relocationsTriggered = true;
                     continue;
                 }
 
                 if (poiState.IsRelocating) continue;
 
-                // Only consider initialized POIs whose 12-hour window has opened
-                if (!poiState.IsInitialized || DateTime.UtcNow < poiState.NextRespawnUtc)
-                    continue;
+                // Only relocate POIs that have been fully cleared
+                if (!poiState.IsCleared || !poiState.IsInitialized) continue;
+                if (DateTime.UtcNow < poiState.NextRespawnUtc) continue;
 
-                bool hasArrived = allActiveOps.Any(o =>
-                    o.TargetPoiId == poiState.PoiId && o.Phase == "arrived");
-                bool hasInbound = allActiveOps.Any(o =>
-                    o.TargetPoiId == poiState.PoiId && o.Phase == "outbound");
+                // Don't relocate while any troops are present or inbound
+                bool hasPresence = allActiveOps.Any(o =>
+                    o.TargetPoiId == poiState.PoiId &&
+                    (o.Phase == "arrived" || o.Phase == "outbound"));
 
-                if (!hasArrived && !hasInbound)
+                if (!hasPresence)
                 {
-                    poiState.TriggerRelocation();
+                    poiState.StartRelocationWarning(15);
                     relocationsTriggered = true;
                 }
             }
@@ -859,6 +909,12 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (settlement.VaultRareTech < request.RareTechAmount)
                 return BadRequest("Not enough RareTech in Relic Vault.");
 
+            // Block scout when POI is in its relocation warning window
+            var scoutTargetPoiState = await _db.PoiStates
+                .FirstOrDefaultAsync(p => p.PoiId == request.TargetPoiId);
+            if (scoutTargetPoiState?.IsRelocating == true)
+                return BadRequest("This POI is relocating to a new location. Wait for the process to complete.");
+
             // Deduct from vault
             settlement.WithdrawFromVault(request.RareTechAmount);
 
@@ -1011,6 +1067,12 @@ namespace TheFallenWastes_WebAPI.Controllers
             // Validate units
             if (request.Units == null || request.Units.Count == 0)
                 return BadRequest("No units specified.");
+
+            // Block attack when POI is in its relocation warning window
+            var attackTargetPoiState = await _db.PoiStates
+                .FirstOrDefaultAsync(p => p.PoiId == request.TargetPoiId);
+            if (attackTargetPoiState?.IsRelocating == true)
+                return BadRequest("This POI is relocating to a new location. Operations are disabled until it settles.");
 
             foreach (var kvp in request.Units)
             {
@@ -1266,6 +1328,29 @@ namespace TheFallenWastes_WebAPI.Controllers
             double distance = Math.Sqrt(Math.Pow(destX - originX, 2) + Math.Pow(destY - originY, 2));
             int seconds = (int)(distance * 0.3);
             return Math.Max(30, Math.Min(seconds, 86400));
+        }
+
+        // ─── Salvage item metadata lookup ──────────────────────────────────────
+        private record SalvageItemMeta(string Key, string Name, string Description, string Rarity, int RequiredLevel, int SalvageTimeSeconds, int RareTechYield);
+
+        private static SalvageItemMeta GetSalvageItemMetadata(string itemName)
+        {
+            return itemName switch
+            {
+                "Cracked Circuit Board"    => new("cracked_circuit_board",    "Cracked Circuit Board",    "Damaged pre-fall electronics board.",                      "common",    1, 120, 2),
+                "Burned Power Cell"        => new("burned_power_cell",        "Burned Power Cell",        "A discharged power cell recovered from ruins.",            "common",    1, 120, 2),
+                "Scrap Bundle"             => new("scrap_bundle",             "Scrap Bundle",             "Assorted wasteland scrap with salvage potential.",         "common",    1, 60,  1),
+                "Fractured Optics Module"  => new("fractured_optics_module",  "Fractured Optics Module",  "A damaged optical sensor from a pre-fall drone.",          "common",    1, 180, 3),
+                "Damaged Servo Bundle"     => new("damaged_servo_bundle",     "Damaged Servo Bundle",     "A set of degraded servo motors from old machinery.",       "uncommon",  1, 240, 5),
+                "Broken Drone Core"        => new("broken_drone_core",        "Broken Drone Core",        "Core unit of a destroyed recon drone.",                    "uncommon",  1, 300, 6),
+                "Pre-War Guidance Chip"    => new("pre_war_guidance_chip",    "Pre-War Guidance Chip",    "Intact guidance chip from pre-fall military hardware.",    "uncommon",  1, 300, 7),
+                "Encrypted Datacore"       => new("encrypted_datacore",       "Encrypted Datacore",       "Recovered archive core with fragmented technical records.", "rare",     2, 480, 8),
+                "Ancient Data Core"        => new("ancient_data_core",        "Ancient Data Core",        "High-density archive from a pre-fall facility.",           "rare",      2, 480, 10),
+                "Prototype Schematic"      => new("prototype_schematic",      "Prototype Schematic",      "A damaged blueprint for advanced military engineering.",    "epic",      2, 720, 16),
+                "Reactor Fragment"         => new("reactor_fragment",         "Reactor Fragment",         "Unstable power shard from a collapsed industrial zone.",   "rare",      2, 600, 5),
+                "Vault Artifact"           => new("vault_artifact",           "Vault Artifact",           "Intact pre-fall relic from a sealed underground vault.",   "legendary", 3, 1200, 24),
+                _                          => new(itemName.ToLowerInvariant().Replace(" ", "_"), itemName, "Unknown salvage item.", "common", 1, 120, 2),
+            };
         }
     }
 }

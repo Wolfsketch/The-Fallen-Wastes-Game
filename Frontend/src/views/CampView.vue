@@ -15,6 +15,10 @@
           <div class="panel-title"><span class="panel-dot" /> OUTPOST STATUS</div>
 
           <div class="settle-name-row">
+            <div class="outpost-img-wrap" @click="showOutpostModal = true">
+              <img src="../images/Settlement/Settlement start.png" class="outpost-img" alt="outpost" />
+              <span class="outpost-zoom-hint">&#128269;</span>
+            </div>
             <span v-if="!renaming" class="settle-name">{{ settlement?.name }}</span>
             <input v-else ref="renameInput" v-model="renameValue" class="rename-input"
               maxlength="40" @keyup.enter="submitRename" @keyup.escape="renaming=false" />
@@ -237,6 +241,15 @@
       </div>
     </div>
   </div>
+  <!-- Outpost image modal -->
+  <Teleport to="body">
+    <div v-if="showOutpostModal" class="outpost-modal-overlay" @click="showOutpostModal = false">
+      <div class="outpost-modal-box" @click.stop>
+        <button class="outpost-modal-close" @click="showOutpostModal = false">&#10005;</button>
+        <img src="../images/Settlement/Settlement start.png" class="outpost-modal-img" alt="Settlement" />
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -250,6 +263,7 @@ const props = defineProps({
 })
 
 // ── Rename ──────────────────────────────────────────────────
+const showOutpostModal = ref(false)
 const renaming = ref(false)
 const renameValue = ref('')
 const renameInput = ref(null)
@@ -445,7 +459,11 @@ onMounted(() => {
 .panel-dot { width:6px;height:6px;background:var(--cyan);box-shadow:0 0 6px var(--cyan);display:inline-block;flex-shrink:0 }
 
 /* Settlement name + rename */
-.settle-name-row { display:flex;align-items:center;gap:8px;margin-bottom:14px }
+.settle-name-row { display:flex;align-items:center;gap:10px;margin-bottom:14px }
+.outpost-img-wrap { width:70px;height:70px;flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer; }
+.outpost-img { width:70px;height:70px;object-fit:contain; }
+.outpost-zoom-hint { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(0,0,0,.55);opacity:0;transition:opacity .15s }
+.outpost-img-wrap:hover .outpost-zoom-hint { opacity:1 }
 .settle-name { font-family:var(--ff-title);font-size:15px;color:var(--bright);font-weight:700;letter-spacing:1px }
 .rename-input { background:rgba(0,212,255,.07);border:1px solid var(--cyan);color:var(--bright);font-family:var(--ff-title);font-size:14px;padding:3px 8px;flex:1;min-width:0;outline:none }
 .rename-btn { background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;transition:color .15s }
@@ -538,4 +556,19 @@ onMounted(() => {
 .tag--amber { color:var(--amber);border-color:rgba(255,184,0,.3);background:rgba(255,184,0,.06) }
 .tag--red { color:var(--red);border-color:rgba(255,60,60,.3);background:rgba(255,60,60,.06) }
 .tag--muted { color:var(--muted);border-color:rgba(150,150,150,.2);background:rgba(150,150,150,.04) }
+
+/* Outpost image modal */
+.outpost-modal-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;
+}
+.outpost-modal-box {
+  position:relative;background:var(--bg2,#111);border:1px solid rgba(0,212,255,.35);border-radius:8px;padding:32px;cursor:default;box-shadow:0 8px 40px rgba(0,0,0,.9);
+}
+.outpost-modal-img {
+  display:block;width:320px;height:320px;object-fit:contain;image-rendering:pixelated;
+}
+.outpost-modal-close {
+  position:absolute;top:8px;right:10px;background:transparent;border:none;color:var(--muted,#666);font-size:14px;cursor:pointer;line-height:1;
+}
+.outpost-modal-close:hover { color:var(--cyan,#00d4ff) }
 </style>

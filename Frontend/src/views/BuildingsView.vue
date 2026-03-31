@@ -152,91 +152,46 @@
       </div>
     </div>
 
-    <div class="filters">
-      <button
-          v-for="cat in categories"
-          :key="cat.key"
-          class="filter-btn"
-          :class="{ 'filter-btn--active': activeFilter === cat.key }"
-          @click="activeFilter = cat.key"
-      >
-        {{ cat.label }}
-      </button>
-    </div>
-
     <div v-if="loading" class="loading-msg">Loading facilities...</div>
     <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-if="!loading" class="buildings-grid">
-      <button
-          v-for="b in filteredBuildings"
-          :key="b.type"
-          class="building-card"
-          :class="{
-          'building-card--upgrading': b.isConstructing,
-          'building-card--unbuilt': b.level === 0 && !b.isConstructing,
-          'building-card--locked': b.isLocked,
-          'building-card--future': b.isFutureFeature
-        }"
-          @click="selectedBuilding = b"
-      >
-        <div class="building-accent" :class="{ 'building-accent--active': b.isConstructing }" />
-
-        <div class="building-body">
-          <div class="building-top">
-            <div class="building-info">
-              <span class="building-icon">{{ getIcon(b.type) }}</span>
-              <div>
-                <div class="building-name" :class="{ 'building-name--dim': b.level === 0 && !b.isConstructing }">
-                  {{ b.displayName }}
-                </div>
-                <div class="building-cat">{{ formatCategoryLabel(b.category) }}</div>
-              </div>
-            </div>
-
-            <div v-if="b.level > 0" class="building-level">L{{ b.level }}</div>
-          </div>
-
-          <div class="building-desc">{{ b.description }}</div>
-
-          <div v-if="b.level > 0 && hasProduction(b)" class="building-prod">
-            {{ getProductionText(b) }}
-          </div>
-
-          <div v-if="b.level > 0 && hasStatsRow(b)" class="building-stats">
-            <span v-if="b.powerValue > 0">PWR {{ b.powerValue }}</span>
-            <span v-if="b.populationUsage > 0">POP {{ b.populationUsage }}</span>
-            <span v-if="b.storageBonus > 0">STORE {{ b.storageBonus }}</span>
-            <span v-if="b.defenseValue > 0">DEF {{ b.defenseValue }}</span>
-          </div>
-
-          <div v-if="b.isConstructing" class="building-progress">
-            <div class="building-progress-header">
-              <span class="building-progress-label">UPGRADING → L{{ b.targetLevel }}</span>
-              <span class="building-progress-time">{{ formatTime(getRemaining(b)) }}</span>
-            </div>
-            <div class="building-progress-bar">
-              <div class="building-progress-fill" :style="{ width: getProgressPct(b) + '%' }" />
-            </div>
-          </div>
-
-          <div v-if="b.isFutureFeature" class="building-future">
-            [ FUTURE FEATURE ]
-          </div>
-
-          <div v-else-if="b.isLocked && b.level === 0" class="building-locked">
-            [ LOCKED ]
-          </div>
-
-          <div v-else-if="b.queueFull && !b.isConstructing" class="building-queue-full">
-            QUEUE FULL ({{ activeCount }}/{{ queueLimit }})
-          </div>
-
-          <div v-else-if="b.level === 0 && !b.isConstructing" class="building-blueprint">
-            [ BLUEPRINT AVAILABLE ]
+    <div v-if="!loading" class="bld-tree">
+      <div v-for="branch in treeData" :key="branch.id" class="bld-branch">
+        <div class="branch-header" @click="toggleBranch(branch.id)">
+          <span class="branch-header-label">{{ branch.label }}</span>
+          <div class="branch-header-right">
+            <span class="branch-count">{{ branch.buildings.filter(b => b.level > 0 || b.isConstructing).length }}/{{ branch.buildings.length }}</span>
+            <span class="branch-chevron">{{ openBranches[branch.id] ? '▲' : '▼' }}</span>
           </div>
         </div>
-      </button>
+        <div v-if="openBranches[branch.id]" class="branch-chain">
+          <template v-for="(b, idx) in branch.buildings" :key="b.type">
+            <div
+              class="bld-node"
+              :class="{
+                'bld-node--upgrading': b.isConstructing,
+                'bld-node--locked': b.isLocked,
+                'bld-node--future': b.isFutureFeature,
+                'bld-node--unbuilt': b.level === 0 && !b.isConstructing && !b.isLocked && !b.isFutureFeature
+              }"
+              @click="selectedBuilding = b"
+            >
+              <div class="node-top">
+                <div class="node-icon-wrap">
+                  <img v-if="getBuildingImage(b.type)" :src="getBuildingImage(b.type)" class="node-img" />
+                  <span v-else class="node-emoji">{{ getIcon(b.type) }}</span>
+                </div>
+                <div class="node-name">{{ b.displayName }}</div>
+                <div class="node-lv" :class="{ 'node-lv--zero': b.level === 0 }">L{{ b.level }}</div>
+              </div>
+              <div class="node-footer" :class="getNodeStatusClass(b)">
+                {{ getNodeStatusText(b) }}
+              </div>
+            </div>
+            <div v-if="idx < branch.buildings.length - 1" class="branch-arrow">›</div>
+          </template>
+        </div>
+      </div>
     </div>
 
         <BuildingModal
@@ -263,6 +218,29 @@ import {
   activateCommanderApi
 } from '../services/api.js'
 import BuildingModal from '../components/BuildingModal.vue'
+import HQIcon from '../images/BuildingIcons/Headquarter.png'
+import ShelterIcon from '../images/BuildingIcons/Shelter.png'
+import CouncilHallIcon from '../images/BuildingIcons/council hall.png'
+import BarracksIcon from '../images/BuildingIcons/Barracks.png'
+import PerimeterWallIcon from '../images/BuildingIcons/PerimeterWall.png'
+import GarageIcon from '../images/BuildingIcons/Garage.png'
+import CommandCenterIcon from '../images/BuildingIcons/Commando Center.png'
+import FuelRefineryIcon from '../images/BuildingIcons/Fuel Refinery.png'
+import FarmDomeIcon from '../images/BuildingIcons/Farm Dome.png'
+import ScrapForgeIcon from '../images/BuildingIcons/ScrapForge.png'
+import WaterPurifierIcon from '../images/BuildingIcons/WaterPurifier.png'
+import SolarArrayIcon from '../images/BuildingIcons/SolarArray.png'
+import RelicVaultIcon from '../images/BuildingIcons/RelicVault.png'
+import WorkshopIcon from '../images/BuildingIcons/Workshop.png'
+import FoodSiloIcon from '../images/BuildingIcons/FoodSilo.png'
+import FuelDepotIcon from '../images/BuildingIcons/FuelDepot.png'
+import PowerBankIcon from '../images/BuildingIcons/PowerBank.png'
+import ScrapVaultIcon from '../images/BuildingIcons/ScrapVault.png'
+import WaterTankIcon from '../images/BuildingIcons/WaterTank.png'
+import TechVaultIcon from '../images/BuildingIcons/TechVault.png'
+import WatchTowerIcon from '../images/BuildingIcons/WatchTower.png'
+import TechLabIcon from '../images/BuildingIcons/TechLab.png'
+import TechSalvagerIcon from '../images/BuildingIcons/TechSalvager.png'
 
 const props = defineProps({
   player: Object,
@@ -541,6 +519,83 @@ const filteredBuildings = computed(() => {
   if (activeFilter.value === 'all') return buildings.value
   return buildings.value.filter(b => b.category === activeFilter.value)
 })
+
+const BUILDING_TREE = [
+  { id: 'core',      label: 'CORE',      chain: ['HeadQuarter', 'Shelter', 'CouncilHall'] },
+  { id: 'military',  label: 'MILITARY',  chain: ['Barracks', 'PerimeterWall', 'Garage', 'CommandCenter'] },
+  { id: 'research',  label: 'RESEARCH',  chain: ['TechLab', 'TechSalvager', 'Workshop', 'RaidVault'] },
+  { id: 'resources', label: 'RESOURCES', chain: ['FarmDome', 'FuelRefinery', 'ScrapForge', 'WaterPurifier', 'SolarArray'] },
+  { id: 'storage',   label: 'STORAGE',   chain: ['FoodSilo', 'FuelDepot', 'PowerBank', 'ScrapVault', 'WaterTank', 'TechVault'] },
+  { id: 'future',    label: 'FUTURE',    chain: ['WatchTower'] }
+]
+
+const treeData = computed(() => {
+  const byType = Object.fromEntries(buildings.value.map(b => [b.type, b]))
+  return BUILDING_TREE.map(branch => ({
+    ...branch,
+    buildings: branch.chain.map(type => byType[type]).filter(Boolean)
+  }))
+})
+
+const BUILDING_IMAGES = {
+  // ── Available ────────────────────────────────────────────
+  HeadQuarter: HQIcon,
+  Shelter: ShelterIcon,
+  CouncilHall: CouncilHallIcon,
+  Barracks: BarracksIcon,
+  PerimeterWall: PerimeterWallIcon,
+  Garage: GarageIcon,
+  CommandCenter: CommandCenterIcon,
+  FuelRefinery: FuelRefineryIcon,
+  FarmDome: FarmDomeIcon,
+  ScrapForge: ScrapForgeIcon,
+  WaterPurifier: WaterPurifierIcon,
+  SolarArray: SolarArrayIcon,
+  RaidVault: RelicVaultIcon,
+  Workshop: WorkshopIcon,
+  FoodSilo: FoodSiloIcon,
+  FuelDepot: FuelDepotIcon,
+  PowerBank: PowerBankIcon,
+  ScrapVault: ScrapVaultIcon,
+  WaterTank: WaterTankIcon,
+  TechVault: TechVaultIcon,
+  WatchTower: WatchTowerIcon,
+  TechLab: TechLabIcon,
+  TechSalvager: TechSalvagerIcon,
+}
+
+function getBuildingImage(type) {
+  return BUILDING_IMAGES[type] || null
+}
+
+const openBranches = ref({
+  core: true, military: true, research: true,
+  resources: true, storage: true, future: true
+})
+
+function toggleBranch(id) {
+  openBranches.value = { ...openBranches.value, [id]: !openBranches.value[id] }
+}
+
+function getNodeStatusText(b) {
+  if (b.isFutureFeature) return 'FUTURE FEATURE'
+  if (b.isLocked) return 'LOCKED'
+  if (b.isConstructing) return `UPGRADING → L${b.targetLevel}`
+  if (b.level === 0) return 'BUILD AVAILABLE'
+  if (b.queueFull) return 'QUEUE FULL'
+  if (b.canUpgrade) return `UPGRADE → L${b.level + 1}`
+  return `L${b.level} ACTIVE`
+}
+
+function getNodeStatusClass(b) {
+  if (b.isFutureFeature) return 'nf-future'
+  if (b.isLocked) return 'nf-locked'
+  if (b.isConstructing) return 'nf-building'
+  if (b.level === 0) return 'nf-blueprint'
+  if (b.queueFull) return 'nf-queued'
+  if (b.canUpgrade) return 'nf-upgrade'
+  return 'nf-active'
+}
 
 async function fetchBuildings() {
   if (!props.settlement?.id) return
@@ -950,126 +1005,79 @@ onUnmounted(() => {
   border-color: #ffc830;
 }
 
-.filters { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap }
-.filter-btn {
-  padding: 4px 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: var(--ff);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: all .15s;
-}
-.filter-btn:hover { border-color: var(--cyan); color: var(--cyan) }
-.filter-btn--active { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-glow) }
+/* ── Building Dependency Tree (Accordion) ──────────────── */
+.bld-tree { display: flex; flex-direction: column; gap: 4px; }
 
-.buildings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px }
-.building-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--ff);
-  display: flex;
-  flex-direction: column;
-  min-height: 170px;
-  position: relative;
-  overflow: hidden;
-  transition: all .2s;
+.bld-branch { border: 1px solid var(--border); overflow: hidden; }
+
+.branch-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px;
+  background: linear-gradient(90deg, rgba(0,212,255,.05), transparent);
+  cursor: pointer; user-select: none; transition: background .15s;
 }
-.building-card--unbuilt { border-style: dashed }
-.building-card--upgrading { border-color: var(--cyan-dark) }
-.building-card--locked { opacity: .92 }
-.building-card--future {
-  border-color: rgba(255,200,48,.25);
-  background: linear-gradient(180deg, rgba(255,200,48,.03), rgba(0,0,0,.1));
+.branch-header:hover { background: linear-gradient(90deg, rgba(0,212,255,.1), transparent); }
+.branch-header-label {
+  font-family: var(--ff-title); font-size: 9px; color: var(--cyan);
+  letter-spacing: 2.5px; font-weight: 700;
 }
-.building-card:hover { border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow) }
-.building-accent { height: 1px; background: linear-gradient(90deg, var(--border), transparent) }
-.building-accent--active { background: linear-gradient(90deg, var(--cyan-dark), var(--cyan), var(--cyan-dark)) }
-.building-body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 6px }
-.building-top { display: flex; justify-content: space-between; align-items: flex-start }
-.building-info { display: flex; align-items: center; gap: 10px }
-.building-icon { font-size: 22px }
-.building-name { font-size: 12px; color: var(--bright); font-weight: 700 }
-.building-name--dim { color: var(--muted) }
-.building-cat { font-size: 7px; color: var(--cyan-dim); font-family: var(--ff-title); letter-spacing: 2px }
-.building-level {
-  font-family: var(--ff-title);
-  font-size: 10px;
-  color: var(--cyan);
-  font-weight: 700;
-  background: var(--cyan-glow);
-  padding: 2px 10px;
-  border: 1px solid var(--cyan-dim);
-  letter-spacing: 1px;
-}
-.building-desc { font-size: 9px; color: var(--muted); line-height: 1.5 }
-.building-prod { font-size: 9px; color: var(--green); font-family: var(--ff-title); letter-spacing: .5px }
-.building-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-}
-.building-stats span {
-  font-size: 8px;
-  color: var(--cyan-dim);
-  font-family: var(--ff-title);
-  letter-spacing: 1px;
-  border: 1px solid var(--border);
-  padding: 2px 6px;
-  background: rgba(0,212,255,.03);
-}
-.building-progress { margin-top: auto }
-.building-progress-header { display: flex; justify-content: space-between; font-size: 9px; margin-bottom: 4px }
-.building-progress-label { color: var(--cyan); font-weight: 700 }
-.building-progress-time { color: var(--cyan); font-family: var(--ff-title); letter-spacing: 1px }
-.building-progress-bar { height: 3px; background: var(--border); border-radius: 1px }
-.building-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--cyan-dark), var(--cyan));
-  border-radius: 1px;
-  box-shadow: 0 0 6px rgba(0,212,255,.4);
-  transition: width 1s linear;
-}
-.building-blueprint,
-.building-locked,
-.building-future {
-  margin-top: auto;
-  font-size: 9px;
-  font-family: var(--ff-title);
-  letter-spacing: 1px;
-}
-.building-blueprint { color: var(--cyan-dim) }
-.building-locked {
-  color: #ff9a40;
-  background: rgba(255,154,64,.04);
-  border: 1px solid rgba(255,154,64,.15);
-  padding: 4px 8px;
-}
-.building-future {
-  color: #ffc830;
-  background: rgba(255,200,48,.05);
-  border: 1px solid rgba(255,200,48,.18);
-  padding: 4px 8px;
-}
-.building-queue-full {
-  margin-top: auto;
-  font-size: 8px;
-  color: #ff6040;
-  font-family: var(--ff-title);
-  letter-spacing: 1px;
-  padding: 4px 8px;
-  background: rgba(255,96,64,.04);
-  border: 1px solid rgba(255,96,64,.15);
+.branch-header-right { display: flex; align-items: center; gap: 10px; }
+.branch-count { font-family: var(--ff-title); font-size: 8px; color: var(--cyan-dark); letter-spacing: 1px; }
+.branch-chevron { font-size: 7px; color: var(--cyan-dark); }
+
+.branch-chain {
+  display: flex; flex-direction: row; align-items: center;
+  padding: 10px 14px; gap: 0; overflow-x: auto;
+  background: var(--bg);
 }
 
+.branch-arrow {
+  font-size: 20px; color: var(--border-bright); padding: 0 6px; flex-shrink: 0; line-height: 1;
+}
+
+/* Node card — fixed equal size */
+.bld-node {
+  width: 175px; height: 96px; flex-shrink: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  cursor: pointer; overflow: hidden; display: flex; flex-direction: column;
+  transition: border-color .15s, box-shadow .15s; position: relative;
+}
+.bld-node:hover { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,212,255,.12); }
+.bld-node--unbuilt { border-style: dashed; }
+.bld-node--upgrading { border-color: var(--cyan-dark); }
+.bld-node--locked { opacity: .82; border-style: dashed; border-color: rgba(255,154,64,.35); }
+.bld-node--future { border-color: rgba(255,200,48,.3); background: rgba(255,200,48,.02); }
+
+.node-top {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px 4px; min-height: 0;
+}
+.node-icon-wrap { flex-shrink: 0; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.node-img { width: 100%; height: 100%; object-fit: contain; transform: scale(1); }
+.node-emoji { font-size: 26px; line-height: 1; }
+.node-name {
+  flex: 1; font-size: 10px; color: var(--bright); font-weight: 700;
+  line-height: 1.25; word-break: break-word;
+}
+.node-lv {
+  font-family: var(--ff-title); font-size: 8px; color: var(--cyan); font-weight: 700;
+  padding: 1px 5px; background: var(--cyan-glow); border: 1px solid var(--cyan-dim);
+  letter-spacing: .5px; flex-shrink: 0; align-self: flex-start;
+}
+.node-lv--zero { color: var(--muted); background: transparent; border-color: var(--border); }
+
+.node-footer {
+  font-family: var(--ff-title); font-size: 7px; letter-spacing: .8px; font-weight: 700;
+  padding: 3px 8px; border-top: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
+}
+.node-footer.nf-upgrade { color: var(--cyan); background: rgba(0,212,255,.07); border-top-color: rgba(0,212,255,.15); }
+.node-footer.nf-blueprint { color: var(--cyan-dark); }
+.node-footer.nf-locked { color: #ff9a40; background: rgba(255,154,64,.05); border-top-color: rgba(255,154,64,.15); }
+.node-footer.nf-future { color: #ffc830; background: rgba(255,200,48,.06); border-top-color: rgba(255,200,48,.18); }
+.node-footer.nf-active { color: var(--muted); }
+.node-footer.nf-queued { color: #ff6040; background: rgba(255,96,64,.05); border-top-color: rgba(255,96,64,.15); }
+.node-footer.nf-building { color: var(--cyan); background: rgba(0,212,255,.1); border-top-color: var(--cyan-dark); animation: pulse 1.5s infinite; }
 /* Cancel confirmation modal */
 .cancel-overlay {
   position: fixed; inset: 0;
