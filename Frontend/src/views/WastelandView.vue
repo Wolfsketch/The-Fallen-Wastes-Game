@@ -106,6 +106,12 @@
                   <div class="movement-info">
                     <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
                     <div class="movement-units">{{ op.unitSummary ?? '—' }}</div>
+                    <div v-if="op.operationType === 'raid_poi'" class="movement-units" style="color:var(--green)">
+                      🧲 {{ op.lootItemsEarned }}/{{ op.maxLootItems ?? '?' }}
+                      <span v-if="(op.raidDurationSeconds ?? 300) - Math.floor((Date.now() - new Date(op.arrivesAtUtc).getTime()) / 1000) > 0">
+                        — {{ formatTravelTime(Math.max(0, (op.raidDurationSeconds ?? 300) - Math.floor((Date.now() - new Date(op.arrivesAtUtc).getTime()) / 1000))) }} left
+                      </span>
+                    </div>
                   </div>
                   <div class="movement-right">
                     <div class="movement-status status--arrived">●</div>
@@ -311,13 +317,13 @@
             </div>
           </div>
           <div class="ss-w">
-            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--available' : 'ssv--unknown'">
-              <span>{{ poiStates[selPoi?.id]?.isCleared ? '0' : (selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???') }}</span>
+            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'ssv--available' : 'ssv--unknown'">
+              <span>{{ poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? '0' : (selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???') }}</span>
             </div></div>
-            <div class="ss"><div class="ssl">LOOT</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--available' : 'ssv--unknown'">
-              <span>{{ poiStates[selPoi?.id]?.isCleared ? '0 items' : (selectedPoiScoutResult?.lootItems?.length ? selectedPoiScoutResult.lootItems.length + ' items' : '???') }}</span>
+            <div class="ss"><div class="ssl">LOOT</div><div class="ssv" :class="currentPoiLootCount === 0 ? 'ssv--available' : 'ssv--unknown'">
+              <span>{{ currentPoiLootCount !== null ? currentPoiLootCount + ' items' : (selectedPoiScoutResult?.lootItems?.length ? selectedPoiScoutResult.lootItems.length + ' items' : '???') }}</span>
             </div></div>
-            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared ? 'ssv--cleared' : (arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available')">{{ poiStates[selPoi?.id]?.isCleared ? 'CLEARED' : (arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE') }}</div></div>
+            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'ssv--cleared' : (arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available')">{{ poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'CLEARED' : (arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE') }}</div></div>
           </div>
           <div v-if="allianceAtPoi(selPoi.id).length > 0" class="poi-alliance-intel">
             <div class="pai-title">◆ ALLIANCE PRESENCE</div>
@@ -343,13 +349,19 @@
               <button class="sa sa--s" @click="openScoutModal('poi')" :disabled="poiStates[selPoi?.id]?.isCleared">👁 Scout <span class="sa-cost">{{ poiScoutCost(selPoi) }} RT</span></button>
               <button class="sa sa--reinforce" @click="openAttackModal('poi')">⛊ Reinforce</button>
               <button class="sa sa--recall" @click="recallTroops(ownArrivedAtSelectedPoi)">↩ Return Troops</button>
-              <div v-if="ownArrivedAtSelectedPoi?.lootItemsEarned > 0"
-                   style="font-size:10px;color:var(--green);font-family:var(--ff-title);padding:4px 8px;">
-                🧲 {{ ownArrivedAtSelectedPoi.lootItemsEarned }} loot collected
+              <div v-if="ownArrivedAtSelectedPoi?.operationType === 'raid_poi'"
+                   style="font-size:10px;color:var(--green);font-family:var(--ff-title);padding:4px 8px;line-height:1.6">
+                <div>🧲 {{ ownArrivedAtSelectedPoi.lootItemsEarned }}/{{ ownArrivedAtSelectedPoi.maxLootItems ?? '?' }} harvested</div>
+                <div v-if="ownArrivedAtSelectedPoi.lootItemsEarned < (ownArrivedAtSelectedPoi.maxLootItems ?? 0)" style="color:var(--muted)">
+                  Next item in {{ formatTravelTime(Math.max(0, (ownArrivedAtSelectedPoi.lootIntervalSeconds ?? 300) - Math.floor((Date.now() - new Date(ownArrivedAtSelectedPoi.arrivesAtUtc).getTime()) / 1000) % (ownArrivedAtSelectedPoi.lootIntervalSeconds ?? 300))) }}
+                </div>
+                <div v-if="(ownArrivedAtSelectedPoi.raidDurationSeconds ?? 300) - Math.floor((Date.now() - new Date(ownArrivedAtSelectedPoi.arrivesAtUtc).getTime()) / 1000) > 0" style="color:var(--muted)">
+                  Auto-return in {{ formatTravelTime(Math.max(0, (ownArrivedAtSelectedPoi.raidDurationSeconds ?? 300) - Math.floor((Date.now() - new Date(ownArrivedAtSelectedPoi.arrivesAtUtc).getTime()) / 1000))) }}
+                </div>
               </div>
             </div>
           </div>
-          <div v-if="poiStates[selPoi.id]?.isCleared" class="poi-cleared-badge">
+          <div v-if="poiStates[selPoi.id]?.isCleared && !ownArrivedAtSelectedPoi" class="poi-cleared-badge">
             ⏳ CLEARED — Respawning in {{ formatTravelTime(poiStates[selPoi.id]?.respawnInSeconds) }}
           </div>
         </div>
@@ -499,53 +511,7 @@
       </div>
     </transition>
 
-    <!-- Combat result popup -->
-    <div v-if="combatResult" class="modal-backdrop" @click.self="combatResult = null">
-      <div class="wl-modal">
-        <div class="modal-header">
-          <span class="modal-title">⚔️ FORCES ARRIVED — {{ combatResult.poiLabel ?? combatResult.poiId }}</span>
-          <button class="modal-close" @click="combatResult = null">✕</button>
-        </div>
-        <div class="modal-body" style="padding:16px">
-          <div v-if="combatResult.attackerWins !== null"
-               :style="combatResult.attackerWins
-                 ? 'color:var(--green);font-family:var(--ff-title);font-size:13px;font-weight:700;margin-bottom:12px'
-                 : 'color:var(--red);font-family:var(--ff-title);font-size:13px;font-weight:700;margin-bottom:12px'">
-            {{ combatResult.attackerWins ? '✓ VICTORY' : '✗ DEFEATED' }}
-          </div>
 
-          <div style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin-bottom:8px">YOUR FORCES</div>
-          <div v-for="(qty, name) in combatResult.attackerSurvived" :key="'s'+name"
-               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
-            <span style="color:var(--text)">{{ name }}</span>
-            <span style="color:var(--green);font-family:var(--ff-title)">{{ qty }} survived</span>
-          </div>
-          <div v-for="(qty, name) in combatResult.attackerLosses" :key="'l'+name"
-               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
-            <span style="color:var(--muted)">{{ name }}</span>
-            <span style="color:var(--red);font-family:var(--ff-title)">-{{ qty }} lost</span>
-          </div>
-
-          <div v-if="Object.keys(combatResult.npcLosses).length"
-               style="font-size:9px;color:var(--cyan);letter-spacing:2px;margin:12px 0 8px">
-            NPC CASUALTIES
-          </div>
-          <div v-for="(qty, name) in combatResult.npcLosses" :key="'n'+name"
-               style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">
-            <span style="color:var(--muted)">{{ name }}</span>
-            <span style="color:var(--orange, #ff9040);font-family:var(--ff-title)">-{{ qty }}</span>
-          </div>
-
-          <div v-if="!combatResult.attackerWins && !combatResult.attackerLosses"
-               style="font-size:11px;color:var(--text)">
-            {{ combatResult.units }} have arrived.
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="modal-confirm" @click="combatResult = null">CLOSE</button>
-        </div>
-      </div>
-    </div>
 
     <!-- Attack Planner Modal -->
     <div v-if="showAttackPlanner" class="modal-backdrop" @click.self="showAttackPlanner = false">
@@ -748,6 +714,26 @@ const ownArrivedAtSelectedPoi = computed(() => {
   ) ?? null
 })
 
+const currentPoiLootCount = computed(() => {
+  if (!selPoi.value) return null
+  const id = selPoi.value.id
+  // Own troops actively raiding (arrived) → use real-time POI loot items
+  if (ownArrivedAtSelectedPoi.value) {
+    const state = poiStates.value[id]
+    if (state && Array.isArray(state.lootItems)) return state.lootItems.length
+    return null
+  }
+  // Own troops on the way back from this POI → compute remaining loot
+  const returningOp = operations.value.find(op =>
+    op.isOwn && op.phase === 'returning' && op.poiId === id && op.operationType === 'raid_poi'
+  )
+  if (returningOp) {
+    const maxLoot = returningOp.maxLootItems ?? selectedPoiScoutResult.value?.lootItems?.length ?? null
+    if (maxLoot != null) return Math.max(0, maxLoot - (returningOp.lootItemsEarned ?? 0))
+  }
+  return null // fall back to scout result or ???
+})
+
 const ownOutboundAtSelectedPoi = computed(() => {
   if (!selPoi.value) return null
   return operations.value.find(op =>
@@ -769,7 +755,6 @@ const selectedPoiScoutResult = computed(() => {
 })
 
 // Stippen enkel voor eigen + alliantie — neutrale/vijand volledig verborgen
-let _lastReturnLogS = 0
 const activeOperationMarkers = computed(() => {
   const now = frameTime.value
   const outbound = operations.value
@@ -782,18 +767,6 @@ const activeOperationMarkers = computed(() => {
         y: op.originY + (op.destY - op.originY) * progress,
       }
     })
-
-  // Debug: log all ops that have returning phase, regardless of filters
-  const _s = Math.floor(Date.now() / 1000)
-  if (_s !== _lastReturnLogS) {
-    _lastReturnLogS = _s
-    const allReturning = operations.value.filter(op => op.phase === 'returning')
-    if (allReturning.length > 0) {
-      allReturning.forEach(op => {
-        console.log(`[RETURN-CHECK] id=${op.id} isOwn=${op.isOwn} returnsAtUtc=${op.returnsAtUtc} travelDuration=${op.travelDuration} originX=${op.originX} destX=${op.destX}`)
-      })
-    }
-  }
 
   const returning = operations.value
     .filter(op => op.phase === 'returning' && op.isOwn && op.returnsAtUtc)
@@ -895,7 +868,6 @@ const raidModes = [
 ]
 
 const scoutError = ref('')
-const scoutReport = ref(null)
 const shownReportIds = new Set()
 
 function reportIdsKey() { return `shownReportIds_${props.settlement?.id ?? 'unknown'}` }
@@ -916,7 +888,7 @@ function markReportShown(id) {
 
 const poiStates = ref({})
 const poiGenerationSeeds = ref({})
-const combatResult = ref(null)
+const scoutReport = ref(null)
 const attackModal = ref({
   open: false, type: 'poi', raidMode: 'quick',
   selectedUnits: {}, error: '', isReinforce: false
@@ -1149,6 +1121,9 @@ async function loadOperations() {
       resultJson: op.resultJson ?? null,
       lootItemsEarned: op.lootItemsEarned ?? op.LootItemsEarned ?? 0,
       lootIntervalSeconds: op.lootIntervalSeconds ?? op.LootIntervalSeconds ?? 300,
+      maxLootItems: op.maxLootItems ?? op.MaxLootItems ?? 0,
+      raidDurationSeconds: op.raidDurationSeconds ?? op.RaidDurationSeconds ?? 300,
+      sentUnits: op.sentUnits ?? op.SentUnits ?? {},
       poiLabel: op.targetPoiLabel ?? op.TargetPoiLabel ?? op.targetPoiId ?? null,
       returnsAtUtc: utcStr(op.returnsAtUtc ?? op.ReturnsAtUtc ?? null),
     }))
@@ -1167,21 +1142,8 @@ async function loadOperations() {
     })
 
     operations.value = [...newOps, ...existingOutbound]
-    operations.value.forEach(op => {
-      const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
-      if (ownSlot && op.isOwn) { op.originX = ownSlot.x; op.originY = ownSlot.y }
-      if (!op.isOwn && op.attackerSettlementId) {
-        const attackerSlot = slots.value.find(s => s.id === op.attackerSettlementId)
-        if (attackerSlot) { op.originX = attackerSlot.x; op.originY = attackerSlot.y }
-      }
-      if (op.poiId) {
-        const poi = pois.value.find(p => p.id === op.poiId)
-        if (poi) { op.destX = poi.x; op.destY = poi.y }
-      } else if (op.targetSettlementId) {
-        const slot = slots.value.find(s => s.id === op.targetSettlementId)
-        if (slot) { op.destX = slot.x; op.destY = slot.y }
-      }
-    })
+
+    resolveOperationCoords()
 
 
 
@@ -1207,19 +1169,6 @@ async function loadOperations() {
           && !shownReportIds.has(String(op.id))
           && op.arrivesAtUtc && (Date.now() - new Date(op.arrivesAtUtc).getTime()) < 5 * 60 * 1000) {
         markReportShown(op.id)
-        let battleData = null
-        try { battleData = op.resultJson ? JSON.parse(op.resultJson) : null } catch {}
-        combatResult.value = {
-          poiId: op.poiId,
-          poiLabel: op.poiLabel ?? op.poiId,
-          units: op.unitSummary ?? 'Unknown forces',
-          status: 'ARRIVED',
-          attackerWins: battleData?.attackerWins ?? null,
-          attackerLosses: battleData?.attackerLosses ?? {},
-          attackerSurvived: battleData?.attackerSurvived ?? {},
-          npcLosses: battleData?.npcLosses ?? {},
-          remainingNpcUnits: battleData?.remainingNpcUnits ?? {}
-        }
       }
     })
     renderMap()
@@ -1230,9 +1179,10 @@ async function loadOperations() {
 
 async function loadPoiStates() {
   try {
-    const data = await getPoiStates()
-    poiStates.value = {}
-    ;(data || []).forEach(s => { poiStates.value[s.poiId] = s })
+    const data = await getPoiStates(props.settlement?.id)
+    const newPoiStates = {}
+    ;(data || []).forEach(s => { newPoiStates[s.poiId] = s })
+    poiStates.value = newPoiStates
 
     // Rebuild generation seeds as a fresh object so the watch detects changes
     const newSeeds = {}
@@ -1266,6 +1216,24 @@ watch(poiGenerationSeeds, (newSeeds, oldSeeds) => {
   regeneratePoisWithSeeds(newSeeds)
 })
 
+function resolveOperationCoords() {
+  const ownSlot = slots.value.find(s => s.id === props.settlement?.id || s.status === 'yours')
+  operations.value.forEach(op => {
+    if (ownSlot && op.isOwn) { op.originX = ownSlot.x; op.originY = ownSlot.y }
+    if (!op.isOwn && op.attackerSettlementId) {
+      const attackerSlot = slots.value.find(s => s.id === op.attackerSettlementId)
+      if (attackerSlot) { op.originX = attackerSlot.x; op.originY = attackerSlot.y }
+    }
+    if (op.poiId) {
+      const poi = pois.value.find(p => p.id === op.poiId)
+      if (poi) { op.destX = poi.x; op.destY = poi.y }
+    } else if (op.targetSettlementId) {
+      const slot = slots.value.find(s => s.id === op.targetSettlementId)
+      if (slot) { op.destX = slot.x; op.destY = slot.y }
+    }
+  })
+}
+
 function regeneratePoisWithSeeds(seeds) {
   if (!worldRenderer) return
   const combinedSeed = Object.values(seeds).reduce((acc, s) => acc + s, 0)
@@ -1282,6 +1250,7 @@ function regeneratePoisWithSeeds(seeds) {
     return newPoi
   })
   renderMap(); renderMini()
+  resolveOperationCoords()
 }
 
 function openAttackModal(type) {
@@ -2052,7 +2021,7 @@ onUnmounted(() => {
 .st--enemy{color:#ff7060;border-color:rgba(255,60,60,.3)}
 .st--empty{color:rgba(0,212,255,.3);border-color:rgba(0,212,255,.15);border-style:dashed}
 .st--poi{color:rgba(0,200,230,.6);border-color:rgba(0,200,230,.25)}
-.poi-active-badge{color:#3dff9c;font-size:8px;letter-spacing:1px;animation:raidPulse 2s ease-in-out infinite}
+.poi-active-badge{color:#3dff9c;font-size:8px;letter-spacing:1px}
 .ss-w{display:flex;gap:16px}
 .ss{min-width:50px}
 .ssl{font-size:7px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:700}

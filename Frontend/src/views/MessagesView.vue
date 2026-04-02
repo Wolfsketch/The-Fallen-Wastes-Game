@@ -363,6 +363,36 @@
             <div v-else class="scout-no-loot">No salvageable loot detected at this location.</div>
           </div>
 
+          <!-- LOOT RETURN REPORT -->
+          <div v-else-if="parsedReportBody?.isLootReport" class="report-card loot-report-card">
+            <div class="loot-report-header">
+              <div class="loot-report-icon">🧺</div>
+              <div class="loot-report-title">LOOT RETRIEVED</div>
+            </div>
+
+            <div class="scout-target-row" style="margin-bottom:6px">
+              <span class="scout-label">SOURCE</span>
+              <span class="scout-poi-name">{{ parsedReportBody.poiName }}</span>
+            </div>
+
+            <div class="loot-summary-row">
+              <span class="loot-summary-count">{{ parsedReportBody.itemsCollected }}</span>
+              <span class="loot-summary-label">{{ parsedReportBody.itemsCollected === 1 ? 'item' : 'items' }} recovered and added to salvage inventory</span>
+            </div>
+
+            <div class="report-section-title" style="margin-top:10px">ITEMS RECOVERED</div>
+            <div class="loot-items-grid">
+              <div v-for="item in parsedReportBody.items" :key="item" class="loot-item-card" :class="getLootRarityClass(item)">
+                <span class="loot-item-icon">{{ getLootIcon(item) }}</span>
+                <div class="loot-item-info">
+                  <span class="loot-item-name">{{ item }}</span>
+                  <span class="loot-item-rarity">{{ getLootRarity(item) }}</span>
+                </div>
+                <span class="loot-item-rt">+{{ getLootRtYield(item) }} RT</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Plain text fallback (old messages / regular messages) -->
           <div v-else class="detail-body">{{ selectedMessage.body }}</div>
 
@@ -830,6 +860,10 @@ function getUnitImage(unitName) {
 function getMessagePreview(msg) {
   try {
     const parsed = JSON.parse(msg.body)
+    if (parsed?.isLootReport) {
+      const count = parsed.itemsCollected ?? parsed.items?.length ?? 0
+      return `${count} item${count !== 1 ? 's' : ''} recovered from ${parsed.poiName}`
+    }
     if (parsed?.isScoutReport) {
       const units = Object.entries(parsed.npcUnits ?? {}).map(([k, v]) => `${v}x ${k}`).join(', ')
       return `Tier ${parsed.tier} POI. Defenders: ${units || 'None'}.`
@@ -867,8 +901,35 @@ function getUnitIcon(unitName) {
   return '⚔️'
 }
 
+// ── Salvage item metadata for loot report card ─────────────────────────────
+const SALVAGE_META = {
+  'Cracked Circuit Board':   { rarity: 'Common',    icon: '🔌', rt: 2 },
+  'Burned Power Cell':       { rarity: 'Common',    icon: '🔋', rt: 2 },
+  'Scrap Bundle':            { rarity: 'Common',    icon: '⚙️', rt: 1 },
+  'Fractured Optics Module': { rarity: 'Common',    icon: '🔭', rt: 3 },
+  'Damaged Servo Bundle':    { rarity: 'Uncommon',  icon: '🦾', rt: 5 },
+  'Broken Drone Core':       { rarity: 'Uncommon',  icon: '🤖', rt: 6 },
+  'Pre-War Guidance Chip':   { rarity: 'Uncommon',  icon: '💾', rt: 7 },
+  'Encrypted Datacore':      { rarity: 'Rare',      icon: '📡', rt: 8 },
+  'Reactor Fragment':        { rarity: 'Rare',      icon: '⚛️', rt: 5 },
+  'Ancient Data Core':       { rarity: 'Rare',      icon: '🗄️', rt: 10 },
+  'Prototype Schematic':     { rarity: 'Epic',      icon: '📋', rt: 16 },
+  'Vault Artifact':          { rarity: 'Legendary', icon: '🏺', rt: 24 },
+}
+function getSalvageMeta(name) { return SALVAGE_META[name] ?? { rarity: 'Common', icon: '🧬', rt: 0 } }
+function getLootRarity(name) { return getSalvageMeta(name).rarity }
+function getLootIcon(name)   { return getSalvageMeta(name).icon }
+function getLootRtYield(name){ return getSalvageMeta(name).rt }
+function getLootRarityClass(name) {
+  const r = getLootRarity(name).toLowerCase()
+  return `loot-rarity--${r}`
+}
+
 onMounted(async () => {
   await loadAllMessages()
+  applyRouteRecipient()
+})
+watch(() => route.query, () => {
   applyRouteRecipient()
 })
 watch(() => route.query, () => {
@@ -1398,6 +1459,96 @@ watch(() => route.query, () => {
 .scout-loot-icon { font-size: 14px; flex-shrink: 0; }
 .scout-loot-name { font-size: 11px; color: var(--green); font-family: var(--ff-title); letter-spacing: .5px; }
 .scout-no-loot { font-size: 11px; color: var(--muted); font-style: italic; padding: 6px 2px; }
+
+/* ── Loot Report Card ────────────────────────────────────────────────────── */
+.loot-report-card {}
+.loot-report-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(0,212,255,.07) 0%, rgba(0,212,255,.03) 100%);
+  border: 1px solid rgba(0,212,255,.25);
+  margin-bottom: 14px;
+}
+.loot-report-icon { font-size: 26px; line-height: 1; }
+.loot-report-title {
+  font-family: var(--ff-title);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--cyan);
+}
+.loot-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 2px;
+}
+.loot-summary-count {
+  font-family: var(--ff-title);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cyan);
+  line-height: 1;
+}
+.loot-summary-label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: .5px;
+}
+.loot-items-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
+.loot-item-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  transition: background .15s;
+}
+.loot-item-card:hover { background: rgba(255,255,255,.03); }
+.loot-item-icon { font-size: 18px; flex-shrink: 0; }
+.loot-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.loot-item-name {
+  font-family: var(--ff-title);
+  font-size: 12px;
+  letter-spacing: .5px;
+  color: var(--bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loot-item-rarity {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  font-family: var(--ff-title);
+  text-transform: uppercase;
+}
+.loot-item-rt {
+  font-family: var(--ff-title);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--cyan);
+}
+/* Rarity border + label colours */
+.loot-rarity--common    { border-left-color: #6c8090; }
+.loot-rarity--common    .loot-item-rarity { color: #6c8090; }
+.loot-rarity--uncommon  { border-left-color: #30c878; }
+.loot-rarity--uncommon  .loot-item-rarity { color: #30c878; }
+.loot-rarity--rare      { border-left-color: #4090ff; }
+.loot-rarity--rare      .loot-item-rarity { color: #4090ff; }
+.loot-rarity--epic      { border-left-color: #b060ff; }
+.loot-rarity--epic      .loot-item-rarity { color: #b060ff; }
+.loot-rarity--legendary { border-left-color: #ffc830; }
+.loot-rarity--legendary .loot-item-rarity { color: #ffc830; }
 
 .messages-empty {
   align-items: center;

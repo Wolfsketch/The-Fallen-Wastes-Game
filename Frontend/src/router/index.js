@@ -13,6 +13,7 @@ import ResearchView from "../views/ResearchView.vue";
 import DefenseView from "../views/DefenseView.vue";
 import RareTechInventoryView from "../views/RareTechInventoryView.vue";
 import AllianceView from "../views/AllianceView.vue";
+import ReportView from '../views/ReportView.vue';
 
 const routes = [
     {
@@ -39,7 +40,7 @@ const routes = [
             { path: 'alliance',  name: 'alliance',   component: AllianceView },
             { path: 'messages', name: 'messages', component: MessagesView },
             { path: 'ranking',   name: 'ranking',    component: RankingView, props: { title: 'RANKING', icon: '◈' } },
-            { path: 'report',    name: 'report',     component: PlaceholderView, props: { title: 'REPORT', icon: '⚑' } },
+            { path: 'report',    name: 'report',    component: ReportView },
             { path: 'documentation', name: 'documentation', component: PlaceholderView, props: { title: 'DOCUMENTATION', icon: '◈' } },
         ]
     }

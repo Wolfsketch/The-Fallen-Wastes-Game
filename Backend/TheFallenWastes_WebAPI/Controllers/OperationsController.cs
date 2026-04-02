@@ -28,15 +28,38 @@ namespace TheFallenWastes_WebAPI.Controllers
         // Returns all POI states; auto-respawns any cleared POIs past their timer
         // ═══════════════════════════════════════════════════════════════════
         [HttpGet("poi-states")]
-        public async Task<IActionResult> GetPoiStates()
+        public async Task<IActionResult> GetPoiStates([FromQuery] Guid? settlementId = null)
         {
             var states = await _db.PoiStates.ToListAsync();
             var now = DateTime.UtcNow;
+
+            // Heal stale data first: un-clear any POI that has loot remaining but IsCleared=true.
+            // This must run BEFORE ShouldRespawn so a wrongly-cleared POI with loot isn't wiped.
+            foreach (var s in states.Where(s => s.IsCleared && !string.IsNullOrEmpty(s.LootItemsJson)))
+            {
+                var remainingLoot = JsonSerializer.Deserialize<List<string>>(s.LootItemsJson!) ?? new();
+                if (remainingLoot.Count > 0)
+                    s.UnClear();
+            }
 
             foreach (var s in states.Where(s => s.ShouldRespawn()))
                 s.Respawn();
 
             await _db.SaveChangesAsync();
+
+            // Only expose live LootItems for POIs where THIS settlement has arrived or returning raid troops
+            var ownArrivedPoiIds = new HashSet<string>();
+            if (settlementId.HasValue)
+            {
+                var ids = await _db.Operations
+                    .Where(o => o.AttackerSettlementId == settlementId.Value
+                             && (o.Phase == "arrived" || o.Phase == "returning")
+                             && o.OperationType == "raid_poi"
+                             && o.TargetPoiId != null)
+                    .Select(o => o.TargetPoiId!)
+                    .ToListAsync();
+                ownArrivedPoiIds = new HashSet<string>(ids);
+            }
 
             return Ok(states.Select(s => new
             {
@@ -54,8 +77,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                     : 0,
                 NpcUnits = string.IsNullOrEmpty(s.NpcUnitsJson) ? null
                     : JsonSerializer.Deserialize<Dictionary<string, int>>(s.NpcUnitsJson),
-                LootItems = string.IsNullOrEmpty(s.LootItemsJson) ? null
-                    : JsonSerializer.Deserialize<List<string>>(s.LootItemsJson)
+                LootItems = ownArrivedPoiIds.Contains(s.PoiId) && !string.IsNullOrEmpty(s.LootItemsJson)
+                    ? JsonSerializer.Deserialize<List<string>>(s.LootItemsJson)
+                    : null
             }));
         }
 
@@ -862,6 +886,54 @@ namespace TheFallenWastes_WebAPI.Controllers
                     int retSecs2 = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                     op.MarkReturning(retSecs2);
                 }
+                else if (op.Phase == "arrived" && op.OperationType == "raid_poi")
+                {
+                    // ── Auto-return: raid mode timer expired OR all loot collected ──────
+                    int raidDurSecs = op.RaidMode switch
+                    {
+                        "quick"      => 300,
+                        "sweep"      => 900,
+                        "extraction" => 3600,
+                        "deep"       => 14400,
+                        _            => 300
+                    };
+                    var poiStateAuto = await _db.PoiStates
+                        .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
+                    var lootPoolAuto = string.IsNullOrEmpty(poiStateAuto?.LootItemsJson)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(poiStateAuto.LootItemsJson) ?? new();
+                    int maxLootAuto  = lootPoolAuto.Count;
+                    int earnedAuto   = Math.Min(op.CalculateLootItemsEarned(now), maxLootAuto);
+                    bool timerDone   = (now - op.ArrivesAtUtc).TotalSeconds >= raidDurSecs;
+                    bool allLootDone = maxLootAuto > 0 && earnedAuto >= maxLootAuto;
+
+                    if (timerDone || allLootDone)
+                    {
+                        // Remove taken items from POI immediately so the live count drops at once
+                        var takenItems = lootPoolAuto.Take(earnedAuto).ToList();
+                        if (poiStateAuto != null && takenItems.Count > 0)
+                        {
+                            foreach (var takenItem in takenItems)
+                                poiStateAuto.RemoveLootItem(takenItem);
+                            _db.Entry(poiStateAuto).Property(p => p.LootItemsJson).IsModified = true;
+                        }
+                        // Merge taken item names into ResultJson so the completing tick can populate salvage
+                        try
+                        {
+                            var resultDict = op.ResultJson != null
+                                ? JsonSerializer.Deserialize<Dictionary<string, object>>(op.ResultJson,
+                                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
+                                : new Dictionary<string, object>();
+                            resultDict["takenLootItems"] = (object)takenItems;
+                            op.SetResult(JsonSerializer.Serialize(resultDict));
+                        }
+                        catch { op.SetResult(JsonSerializer.Serialize(new { takenLootItems = takenItems })); }
+
+                        op.SetLootCollected(earnedAuto);
+                        int retSecsRaid = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
+                        op.MarkReturning(retSecsRaid);
+                    }
+                }
                 else if (op.Phase == "returning" && op.ReturnsAtUtc.HasValue && now >= op.ReturnsAtUtc.Value)
                 {
                     // Restore surviving units and any looted resources to the home settlement
@@ -907,51 +979,7 @@ namespace TheFallenWastes_WebAPI.Controllers
 
                     // ── POI raid: add earned loot to Salvage Inventory on return ──
                     if (op.OperationType == "raid_poi" && op.LootItemsCollected > 0)
-                    {
-                        try
-                        {
-                            var poiStateForLoot = await _db.PoiStates
-                                .FirstOrDefaultAsync(p => p.PoiId == op.TargetPoiId);
-                            if (poiStateForLoot != null && !string.IsNullOrEmpty(poiStateForLoot.LootItemsJson))
-                            {
-                                var lootPool = JsonSerializer.Deserialize<List<string>>(poiStateForLoot.LootItemsJson)
-                                    ?? new List<string>();
-                                int toTake = Math.Min(op.LootItemsCollected, lootPool.Count);
-                                var earnedItems = lootPool.Take(toTake).ToList();
-
-                                if (earnedItems.Count > 0)
-                                {
-                                    var salvageInv = await _db.SettlementSalvageInventories
-                                        .Include(i => i.Items)
-                                        .FirstOrDefaultAsync(i => i.SettlementId == op.AttackerSettlementId);
-                                    if (salvageInv == null)
-                                    {
-                                        salvageInv = new SettlementSalvageInventory(op.AttackerSettlementId);
-                                        _db.SettlementSalvageInventories.Add(salvageInv);
-                                    }
-
-                                    foreach (var itemName in earnedItems)
-                                    {
-                                        var meta = GetSalvageItemMetadata(itemName);
-                                        salvageInv.AddItem(
-                                            key: meta.Key,
-                                            name: meta.Name,
-                                            description: meta.Description,
-                                            sourceType: "poi",
-                                            rarity: meta.Rarity,
-                                            quantity: 1,
-                                            requiredTechSalvagerLevel: meta.RequiredLevel,
-                                            baseSalvageTimeSeconds: meta.SalvageTimeSeconds,
-                                            rareTechYield: meta.RareTechYield,
-                                            researchDataYield: 0,
-                                            specialOutputKey: null);
-                                        poiStateForLoot.RemoveLootItem(itemName);
-                                    }
-                                }
-                            }
-                        }
-                        catch { /* salvage transfer is non-critical */ }
-                    }
+                        await HandleRaidPoiLootCompletionAsync(op);
 
                     op.MarkCompleted(op.ResultJson ?? "{}");
                 }
@@ -1067,6 +1095,22 @@ namespace TheFallenWastes_WebAPI.Controllers
                 .Where(s => allIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id, s => s.Name);
 
+            // Load poi loot counts for capping LootItemsEarned in the response
+            var raidPoiIds = operations
+                .Where(o => o.OperationType == "raid_poi" && o.TargetPoiId != null)
+                .Select(o => o.TargetPoiId!)
+                .Distinct()
+                .ToList();
+            var poiLootCounts = raidPoiIds.Count > 0
+                ? await _db.PoiStates
+                    .Where(p => raidPoiIds.Contains(p.PoiId))
+                    .ToDictionaryAsync(
+                        p => p.PoiId,
+                        p => string.IsNullOrEmpty(p.LootItemsJson)
+                            ? 0
+                            : (JsonSerializer.Deserialize<List<string>>(p.LootItemsJson) ?? new()).Count)
+                : new Dictionary<string, int>();
+
             var result = operations
                 .Where(o => o.Phase != "completed" ||
                             (o.OperationType == "scout_poi" &&
@@ -1087,6 +1131,23 @@ namespace TheFallenWastes_WebAPI.Controllers
                         : o.ReturnsAtUtc.HasValue
                             ? Math.Max(0, (o.ReturnsAtUtc.Value - now).TotalSeconds)
                             : 0;
+
+                    int maxLootItems = o.OperationType == "raid_poi"
+                        ? (o.Phase == "returning"
+                            // Items were already removed from POI when the op started returning.
+                            // Restore the original total so the frontend formula (max - earned = remaining) works.
+                            ? o.LootItemsCollected + poiLootCounts.GetValueOrDefault(o.TargetPoiId ?? "", 0)
+                            : poiLootCounts.GetValueOrDefault(o.TargetPoiId ?? "", 0))
+                        : 0;
+
+                    int raidDurationSeconds = o.RaidMode switch
+                    {
+                        "quick"      => 300,
+                        "sweep"      => 900,
+                        "extraction" => 3600,
+                        "deep"       => 14400,
+                        _            => 300
+                    };
 
                     // EF Core loads DateTime with Kind=Unspecified; force Utc so JSON serializer
                     // includes the 'Z' suffix and JavaScript parses as UTC (not local time).
@@ -1115,8 +1176,11 @@ namespace TheFallenWastes_WebAPI.Controllers
                         IsOwn = o.AttackerSettlementId == settlementId,
                         o.ResultJson,
                         LootItemsEarned = o.OperationType == "raid_poi"
-                            ? o.CalculateLootItemsEarned(now) : 0,
-                        o.LootIntervalSeconds
+                            ? Math.Min(o.CalculateLootItemsEarned(now), maxLootItems)
+                            : 0,
+                        o.LootIntervalSeconds,
+                        MaxLootItems = maxLootItems,
+                        RaidDurationSeconds = raidDurationSeconds
                     };
                 })
                 .ToList();
@@ -1144,7 +1208,41 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (!wasOutbound)
             {
                 // Already at destination — collect partial loot and send back
-                lootEarned = operation.CalculateLootItemsEarned(DateTime.UtcNow);
+                if (operation.OperationType == "raid_poi")
+                {
+                    // Cap by actual loot remaining at the POI
+                    var poiStateRecall = await _db.PoiStates
+                        .FirstOrDefaultAsync(p => p.PoiId == operation.TargetPoiId);
+                    var lootPoolRecall = string.IsNullOrEmpty(poiStateRecall?.LootItemsJson)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(poiStateRecall.LootItemsJson) ?? new();
+                    lootEarned = Math.Min(operation.CalculateLootItemsEarned(DateTime.UtcNow), lootPoolRecall.Count);
+
+                    // Take those items from the POI immediately (same as auto-return path)
+                    var takenOnRecall = lootPoolRecall.Take(lootEarned).ToList();
+                    if (poiStateRecall != null && takenOnRecall.Count > 0)
+                    {
+                        foreach (var item in takenOnRecall)
+                            poiStateRecall.RemoveLootItem(item);
+                        _db.Entry(poiStateRecall).Property(p => p.LootItemsJson).IsModified = true;
+                    }
+
+                    // Merge takenLootItems into ResultJson so HandleRaidPoiLootCompletionAsync can process them
+                    try
+                    {
+                        var resultDict = operation.ResultJson != null
+                            ? JsonSerializer.Deserialize<Dictionary<string, object>>(operation.ResultJson,
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
+                            : new Dictionary<string, object>();
+                        resultDict["takenLootItems"] = (object)takenOnRecall;
+                        operation.SetResult(JsonSerializer.Serialize(resultDict));
+                    }
+                    catch { operation.SetResult(JsonSerializer.Serialize(new { takenLootItems = takenOnRecall })); }
+                }
+                else
+                {
+                    lootEarned = operation.CalculateLootItemsEarned(DateTime.UtcNow);
+                }
                 operation.SetLootCollected(lootEarned);
 
                 // For stationed reinforcement: all units return (no combat losses on recall)
@@ -1227,9 +1325,14 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (settlement.VaultRareTech < request.RareTechAmount)
                 return BadRequest("Not enough RareTech in Relic Vault.");
 
-            // Block scout when POI is in its relocation warning window
             var scoutTargetPoiState = await _db.PoiStates
                 .FirstOrDefaultAsync(p => p.PoiId == request.TargetPoiId);
+
+            // Block scout when POI is cleared (not yet respawned)
+            if (scoutTargetPoiState?.IsCleared == true)
+                return BadRequest("This POI has been cleared. Wait for it to respawn before scouting.");
+
+            // Block scout when POI is in its relocation warning window
             if (scoutTargetPoiState?.IsRelocating == true)
                 return BadRequest("This POI is relocating to a new location. Wait for the process to complete.");
 
@@ -1710,6 +1813,101 @@ namespace TheFallenWastes_WebAPI.Controllers
             double distance = Math.Sqrt(Math.Pow(destX - originX, 2) + Math.Pow(destY - originY, 2));
             int seconds = (int)(distance * 0.3);
             return Math.Max(30, Math.Min(seconds, 86400));
+        }
+
+        // ─── Raid POI loot completion ───────────────────────────────────────────
+        // Extracted into its own method to keep GetOperationsForSettlement's async
+        // state machine small enough for the JIT to handle without crashing.
+        private async Task HandleRaidPoiLootCompletionAsync(Operation op)
+        {
+            List<string> earnedItems = new();
+            if (op.ResultJson != null)
+            {
+                try
+                {
+                    using var rd = JsonDocument.Parse(op.ResultJson);
+                    if (rd.RootElement.TryGetProperty("takenLootItems", out var tiProp))
+                        earnedItems = JsonSerializer.Deserialize<List<string>>(tiProp.GetRawText()) ?? new();
+                }
+                catch { }
+            }
+
+            if (earnedItems.Count == 0) return;
+
+            // Ensure salvage inventory exists — query without tracking to avoid EF state confusion
+            var invId = await _db.SettlementSalvageInventories
+                .AsNoTracking()
+                .Where(i => i.SettlementId == op.AttackerSettlementId)
+                .Select(i => (Guid?)i.Id)
+                .FirstOrDefaultAsync();
+
+            if (invId == null)
+            {
+                var newInvId = Guid.NewGuid();
+                var invNow = DateTime.UtcNow;
+                await _db.Database.ExecuteSqlAsync(
+                    $"INSERT INTO SettlementSalvageInventories (Id, SettlementId, StoredRareTech, StoredResearchData, UpdatedAtUtc) VALUES ({newInvId}, {op.AttackerSettlementId}, 0, 0, {invNow})");
+                invId = newInvId;
+            }
+
+            var salvageNow = DateTime.UtcNow;
+            foreach (var itemName in earnedItems)
+            {
+                var meta = GetSalvageItemMetadata(itemName);
+                var newItemId = Guid.NewGuid();
+                var settlementId = op.AttackerSettlementId;
+                var resolvedInvId = invId.Value;
+                var sourceType = "poi";
+                string? noSpecialOutput = null;
+                await _db.Database.ExecuteSqlAsync(
+                    $@"MERGE SalvageItems WITH (HOLDLOCK) AS target
+                    USING (SELECT {settlementId} AS SettlementId, {meta.Key} AS [Key]) AS source
+                    ON target.SettlementId = source.SettlementId AND target.[Key] = source.[Key]
+                    WHEN MATCHED THEN
+                        UPDATE SET [Quantity] = target.[Quantity] + 1, [AcquiredAtUtc] = {salvageNow}
+                    WHEN NOT MATCHED THEN
+                        INSERT ([Id],[SettlementId],[SettlementSalvageInventoryId],[Key],[Name],[Description],[SourceType],[Rarity],[Quantity],[RequiredTechSalvagerLevel],[BaseSalvageTimeSeconds],[RareTechYield],[ResearchDataYield],[SpecialOutputKey],[AcquiredAtUtc])
+                        VALUES ({newItemId},{settlementId},{resolvedInvId},{meta.Key},{meta.Name},{meta.Description},{sourceType},{meta.Rarity},1,{meta.RequiredLevel},{meta.SalvageTimeSeconds},{meta.RareTechYield},0,{noSpecialOutput},{salvageNow});");
+            }
+
+            await _db.Database.ExecuteSqlAsync(
+                $"UPDATE SettlementSalvageInventories SET UpdatedAtUtc = {salvageNow} WHERE Id = {invId.Value}");
+
+            // Clear takenLootItems from ResultJson so the next poll won't re-salvage
+            try
+            {
+                var resultDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                    op.ResultJson!, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                resultDict.Remove("takenLootItems");
+                op.SetResult(JsonSerializer.Serialize(resultDict));
+            }
+            catch { }
+
+            // Send loot return report
+            var lootSett = await _db.Settlements
+                .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+            if (lootSett != null)
+            {
+                var lootPlayer = await _db.Players
+                    .FirstOrDefaultAsync(p => p.Id == lootSett.PlayerId);
+                if (lootPlayer != null)
+                {
+                    string poiNameLoot = !string.IsNullOrEmpty(op.TargetPoiLabel)
+                        ? op.TargetPoiLabel : op.TargetPoiId ?? "Unknown POI";
+                    _db.Messages.Add(new Message(
+                        senderPlayerId: lootPlayer.Id,
+                        receiverPlayerId: lootPlayer.Id,
+                        subject: $"\ud83e\uddfa Loot Returned \u2014 {poiNameLoot}",
+                        body: JsonSerializer.Serialize(new
+                        {
+                            isLootReport = true,
+                            poiName = poiNameLoot,
+                            itemsCollected = earnedItems.Count,
+                            items = earnedItems
+                        }),
+                        messageType: "report"));
+                }
+            }
         }
 
         // ─── Salvage item metadata lookup ──────────────────────────────────────

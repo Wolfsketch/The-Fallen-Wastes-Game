@@ -40,9 +40,22 @@ namespace TheFallenWastes_Domain.Entities
 
         public void MarkCleared()
         {
+            // Guard: only clear when no loot remains
+            var loot = string.IsNullOrEmpty(LootItemsJson)
+                ? new List<string>()
+                : System.Text.Json.JsonSerializer.Deserialize<List<string>>(LootItemsJson) ?? new List<string>();
+            if (loot.Any()) return;
+
             IsCleared = true;
             ClearedAtUtc = DateTime.UtcNow;
             NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
+        }
+
+        /// <summary>Resets the cleared flag when loot is still present (heals inconsistent DB state).</summary>
+        public void UnClear()
+        {
+            IsCleared = false;
+            ClearedAtUtc = null;
         }
 
         public bool ShouldRespawn() => IsCleared && DateTime.UtcNow >= NextRespawnUtc;
@@ -118,9 +131,17 @@ namespace TheFallenWastes_Domain.Entities
             NpcUnitsJson = System.Text.Json.JsonSerializer.Serialize(units);
             if (!units.Any())
             {
-                IsCleared = true;
-                ClearedAtUtc = DateTime.UtcNow;
-                NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
+                // Only mark cleared if there is also no loot left
+                var loot = string.IsNullOrEmpty(LootItemsJson)
+                    ? new System.Collections.Generic.List<string>()
+                    : System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<string>>(LootItemsJson)
+                      ?? new System.Collections.Generic.List<string>();
+                if (!loot.Any())
+                {
+                    IsCleared = true;
+                    ClearedAtUtc = DateTime.UtcNow;
+                    NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
+                }
             }
         }
 
@@ -128,9 +149,24 @@ namespace TheFallenWastes_Domain.Entities
         {
             if (string.IsNullOrEmpty(LootItemsJson)) return;
             var items = System.Text.Json.JsonSerializer
-                .Deserialize<List<string>>(LootItemsJson) ?? new List<string>();
+                .Deserialize<System.Collections.Generic.List<string>>(LootItemsJson) ?? new System.Collections.Generic.List<string>();
             items.Remove(item);
             LootItemsJson = System.Text.Json.JsonSerializer.Serialize(items);
+
+            // If all loot is gone and all NPCs are gone → mark cleared
+            if (!items.Any())
+            {
+                var npcs = string.IsNullOrEmpty(NpcUnitsJson)
+                    ? new System.Collections.Generic.Dictionary<string, int>()
+                    : System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, int>>(NpcUnitsJson)
+                      ?? new System.Collections.Generic.Dictionary<string, int>();
+                if (!npcs.Any())
+                {
+                    IsCleared = true;
+                    ClearedAtUtc = DateTime.UtcNow;
+                    NextRespawnUtc = DateTime.UtcNow.AddMinutes(RespawnMinutes);
+                }
+            }
         }
     }
 }

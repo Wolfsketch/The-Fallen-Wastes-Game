@@ -266,8 +266,10 @@ export async function reinforceSettlement(settlementId, targetSettlementId, unit
     return response.data
 }
 
-export async function getPoiStates() {
-    const response = await api.get('/Operations/poi-states')
+export async function getPoiStates(settlementId) {
+    const response = await api.get('/Operations/poi-states', {
+        params: settlementId ? { settlementId } : {}
+    })
     return response.data
 }
 

@@ -137,16 +137,27 @@
           </router-link>
 
           <div class="nav-group-label">Support</div>
-          <router-link
-              v-for="item in navSupport"
-              :key="item.route"
-              :to="item.route"
-              class="nav-item"
-              :class="{ 'nav-item--active': $route.name === item.name }"
-          >
-            <div class="nav-icon" v-html="item.svg" />
-            <span class="nav-label">{{ item.label }}</span>
-          </router-link>
+          <template v-for="item in navSupport" :key="item.href ?? item.route">
+            <a
+                v-if="item.href"
+                :href="item.href"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="nav-item"
+            >
+              <div class="nav-icon" v-html="item.svg" />
+              <span class="nav-label">{{ item.label }}</span>
+            </a>
+            <router-link
+                v-else
+                :to="item.route"
+                class="nav-item"
+                :class="{ 'nav-item--active': $route.name === item.name }"
+            >
+              <div class="nav-icon" v-html="item.svg" />
+              <span class="nav-label">{{ item.label }}</span>
+            </router-link>
+          </template>
         </div>
 
         <div class="sidebar-footer">
@@ -237,6 +248,7 @@ const icons = {
   messages: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M2 4l10 8 10-8"/></svg>`,
   ranking: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 9H2v12h4V9zM14 4h-4v17h4V4zM22 13h-4v8h4v-8z"/></svg>`,
   report: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>`,
+  forum: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   documentation: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
 }
 
@@ -260,7 +272,8 @@ const navWorld = [
 
 const navSupport = [
   { route: '/game/report', name: 'report', label: 'Report', svg: icons.report },
-  { route: '/game/documentation', name: 'documentation', label: 'Documentation', svg: icons.documentation },
+  { href: 'http://forum.localhost:5173', name: 'forum', label: 'Forum', svg: icons.forum },
+  { href: 'http://docs.localhost:5173', name: 'documentation', label: 'Documentation', svg: icons.documentation },
 ]
 
 const timeStr = computed(() => time.value.toLocaleTimeString('en-GB'))

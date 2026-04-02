@@ -37,6 +37,10 @@ namespace TheFallenWastes_Infrastructure
         public DbSet<AllianceForumTopic> AllianceForumTopics { get; set; }
         public DbSet<AllianceForumPost> AllianceForumPosts { get; set; }
 
+        public DbSet<BugReport> BugReports { get; set; }
+        public DbSet<ForumTopic> ForumTopics { get; set; }
+        public DbSet<ForumPost> ForumPosts { get; set; }
+
         public GameDbContext(DbContextOptions<GameDbContext> options)
             : base(options)
         {
@@ -377,6 +381,55 @@ namespace TheFallenWastes_Infrastructure
             {
                 entity.HasKey(x => x.Id);
                 entity.Property(x => x.Content).IsRequired().HasMaxLength(5000);
+            });
+
+            // ----------------------------
+            // BUG REPORTS
+            // ----------------------------
+
+            modelBuilder.Entity<BugReport>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Title).IsRequired().HasMaxLength(200);
+                entity.Property(x => x.Category).IsRequired().HasMaxLength(60);
+                entity.Property(x => x.Area).HasMaxLength(80);
+                entity.Property(x => x.Severity).IsRequired().HasMaxLength(20);
+                entity.Property(x => x.Description).IsRequired().HasMaxLength(4000);
+                entity.Property(x => x.StepsToReproduce).HasMaxLength(2000);
+                entity.Property(x => x.SettlementName).HasMaxLength(80);
+                entity.Property(x => x.Browser).HasMaxLength(100);
+                entity.Property(x => x.Status).IsRequired().HasMaxLength(20);
+                entity.HasIndex(x => x.PlayerId);
+                entity.HasIndex(x => new { x.PlayerId, x.CreatedAtUtc });
+            });
+
+            // ----------------------------
+            // GLOBAL FORUM
+            // ----------------------------
+
+            modelBuilder.Entity<ForumTopic>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.CategoryKey).IsRequired().HasMaxLength(40);
+                entity.Property(x => x.Title).IsRequired().HasMaxLength(160);
+                entity.Property(x => x.AuthorUsername).HasMaxLength(60);
+                entity.Property(x => x.LastPostUsername).HasMaxLength(60);
+
+                entity.HasMany(x => x.Posts)
+                    .WithOne()
+                    .HasForeignKey(x => x.TopicId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(x => x.CategoryKey);
+                entity.HasIndex(x => x.LastPostAtUtc);
+            });
+
+            modelBuilder.Entity<ForumPost>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Content).IsRequired().HasMaxLength(8000);
+                entity.Property(x => x.AuthorUsername).HasMaxLength(60);
+                entity.HasIndex(x => x.TopicId);
             });
 
             // ----------------------------

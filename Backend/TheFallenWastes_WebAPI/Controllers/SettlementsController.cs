@@ -386,9 +386,12 @@ namespace TheFallenWastes_WebAPI.Controllers
                 })
                 .ToList();
 
-            var waiting = await _db.BuildingUpgradeQueueItems
+            var waitingItems = await _db.BuildingUpgradeQueueItems
                 .Where(q => q.SettlementId == settlement.Id && !q.IsStarted)
                 .OrderBy(q => q.CreatedAtUtc)
+                .ToListAsync();
+
+            var waiting = waitingItems
                 .Select(q => new
                 {
                     q.Id,
@@ -406,7 +409,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                         rareTech = q.CostRareTech
                     }
                 })
-                .ToListAsync();
+                .ToList();
 
             return Ok(new
             {
@@ -1474,8 +1477,8 @@ namespace TheFallenWastes_WebAPI.Controllers
 
             if (rareTechGained > 0)
             {
-                settlement.DepositToVault(rareTechGained);
-                _db.Entry(settlement).Property(s => s.VaultRareTech).IsModified = true;
+                settlement.AddResourcesCapped(0, 0, 0, 0, 0, rareTechGained);
+                _db.Entry(settlement).Property(s => s.Resources).IsModified = true;
             }
 
             await _db.SaveChangesAsync();
