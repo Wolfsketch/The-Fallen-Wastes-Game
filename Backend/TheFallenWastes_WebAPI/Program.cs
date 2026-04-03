@@ -23,7 +23,15 @@ namespace TheFallenWastes_WebAPI
             builder.Services.AddScoped<PlayerDataMigrationService>();
 
             // Configure Stripe with secret key from config
-            StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
+            var stripeSecret = builder.Configuration["Stripe:SecretKey"];
+            if (string.IsNullOrWhiteSpace(stripeSecret) ||
+                stripeSecret.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase) ||
+                stripeSecret.StartsWith("sk_test_REPLACE", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("[STRIPE WARNING] Stripe:SecretKey is missing or still has a placeholder value. " +
+                    "Stripe payment creation will fail. Update appsettings.Development.json with real test keys.");
+            }
+            StripeConfiguration.ApiKey = stripeSecret;
 
             builder.Services.AddDbContext<GameDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

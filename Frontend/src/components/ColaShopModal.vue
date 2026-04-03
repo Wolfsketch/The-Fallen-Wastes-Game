@@ -162,7 +162,11 @@ async function selectPackage(pkg) {
 
   try {
     const publishableKey = await getStripePublishableKey()
-    const { clientSecret } = await createPaymentIntent(props.player.id, pkg.id)
+    if (!publishableKey) throw new Error('Server returned an empty publishable key.')
+
+    const data = await createPaymentIntent(props.player.id, pkg.id)
+    const clientSecret = data?.clientSecret
+    if (!clientSecret) throw new Error('Server did not return a clientSecret.')
 
     selectedPackage.value = pkg
     step.value = 'pay'
@@ -170,7 +174,14 @@ async function selectPackage(pkg) {
     await nextTick()
     await mountStripeElement(publishableKey, clientSecret)
   } catch (err) {
-    error.value = err?.response?.data ?? err?.message ?? 'Could not initialize payment. Please try again.'
+    const detail =
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ??
+      err?.response?.data?.message ??
+      err?.message ??
+      'Could not initialize payment. Please try again.'
+    console.error('[ColaShop] Payment init failed:', err)
+    console.error('[ColaShop] Backend response:', err?.response?.data)
+    error.value = detail
   } finally {
     loading.value = null
   }
@@ -189,6 +200,9 @@ async function mountStripeElement(publishableKey, clientSecret) {
       fontFamily: 'monospace, system-ui',
       borderRadius: '0px',
       spacingUnit: '4px',
+      // Keep icons and text amber on selected tab (prevents the black-icon bug)
+      colorIconTab: '#8ca0b8',
+      colorIconTabSelected: '#ffa600',
     },
     rules: {
       '.Input': {
@@ -208,19 +222,31 @@ async function mountStripeElement(publishableKey, clientSecret) {
       '.Tab': {
         border: '1px solid rgba(255,166,0,0.2)',
         backgroundColor: 'rgba(0,0,0,0.3)',
+        color: '#8ca0b8',
+      },
+      '.Tab:hover': {
+        color: '#c8d8ea',
+        backgroundColor: 'rgba(255,166,0,0.06)',
       },
       '.Tab--selected': {
         border: '1px solid rgba(255,166,0,0.7)',
         backgroundColor: 'rgba(255,166,0,0.08)',
+        // Explicit color overrides the night-theme black-on-light default
+        color: '#ffa600',
+      },
+      '.Tab--selected:hover': {
+        backgroundColor: 'rgba(255,166,0,0.12)',
+        color: '#ffa600',
       },
     },
   }
 
-  elements = stripe.elements({ clientSecret, appearance })
+  // locale: 'en' forces all Stripe UI text to English regardless of browser language
+  elements = stripe.elements({ clientSecret, appearance, locale: 'en' })
 
   paymentElement = elements.create('payment', {
     layout: 'tabs',
-    paymentMethodOrder: ['bancontact', 'ideal', 'card'],
+    paymentMethodOrder: ['ideal', 'bancontact', 'card'],
   })
 
   paymentElement.mount('#stripe-payment-element')
@@ -246,6 +272,7 @@ async function confirmPayment() {
   paying.value = false
 
   if (stripeError) {
+    console.error('[ColaShop] stripe.confirmPayment error:', stripeError)
     error.value = stripeError.message
   } else {
     step.value = 'success'

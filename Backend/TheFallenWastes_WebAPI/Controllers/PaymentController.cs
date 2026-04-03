@@ -20,19 +20,31 @@ namespace TheFallenWastes_WebAPI.Controllers
             ["overlord"]  = (25000, 7999),
         };
 
+        private static readonly HashSet<string> PlaceholderPrefixes =
+        [
+            "REPLACE_", "sk_test_REPLACE", "pk_test_REPLACE", "whsec_REPLACE",
+        ];
+
         private readonly GameDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<PaymentController> _logger;
+        private readonly IHostEnvironment _env;
 
         public PaymentController(
             GameDbContext context,
             IConfiguration config,
-            ILogger<PaymentController> logger)
+            ILogger<PaymentController> logger,
+            IHostEnvironment env)
         {
             _context = context;
             _config = config;
             _logger = logger;
+            _env = env;
         }
+
+        private bool IsPlaceholder(string? value) =>
+            string.IsNullOrWhiteSpace(value) ||
+            PlaceholderPrefixes.Any(p => value.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
         // ─────────────────────────────────────────────────────────────────────
         // GET /api/Payment/publishable-key
@@ -43,8 +55,11 @@ namespace TheFallenWastes_WebAPI.Controllers
         public IActionResult GetPublishableKey()
         {
             var key = _config["Stripe:PublishableKey"];
-            if (string.IsNullOrWhiteSpace(key))
-                return StatusCode(500, "Stripe publishable key is not configured.");
+            if (IsPlaceholder(key))
+            {
+                _logger.LogError("Stripe:PublishableKey is missing or still has a placeholder value.");
+                return StatusCode(500, "Stripe PublishableKey is not configured on the server.");
+            }
 
             return Ok(new { publishableKey = key });
         }
@@ -57,6 +72,14 @@ namespace TheFallenWastes_WebAPI.Controllers
         [HttpPost("create-intent")]
         public async Task<IActionResult> CreateIntent([FromBody] CreateIntentRequest request)
         {
+            // Validate Stripe secret key before making any API call
+            var secretKey = _config["Stripe:SecretKey"];
+            if (IsPlaceholder(secretKey))
+            {
+                _logger.LogError("Stripe:SecretKey is missing or still has a placeholder value.");
+                return StatusCode(500, "Stripe SecretKey is not configured on the server. Update appsettings.Development.json.");
+            }
+
             if (!Packages.TryGetValue(request.PackageId?.ToLowerInvariant() ?? "", out var pkg))
                 return BadRequest("Unknown package.");
 
@@ -70,10 +93,9 @@ namespace TheFallenWastes_WebAPI.Controllers
             {
                 Amount = pkg.Cents,
                 Currency = "eur",
-                AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
-                {
-                    Enabled = true,
-                },
+                // Explicit list guarantees iDEAL, Bancontact and card always appear.
+                // Do NOT combine with AutomaticPaymentMethods when listing types explicitly.
+                PaymentMethodTypes = new List<string> { "card", "bancontact", "ideal" },
                 Metadata = new Dictionary<string, string>
                 {
                     ["playerId"]   = request.PlayerId.ToString(),
@@ -90,8 +112,24 @@ namespace TheFallenWastes_WebAPI.Controllers
             }
             catch (StripeException ex)
             {
-                _logger.LogError(ex, "Stripe error creating PaymentIntent for player {PlayerId}", request.PlayerId);
-                return StatusCode(502, "Payment provider error. Please try again.");
+                _logger.LogError(
+                    ex,
+                    "Stripe error creating PaymentIntent. Player={PlayerId} Package={PackageId} | " +
+                    "StripeCode={Code} StripeType={Type} HttpStatus={HttpStatus} Message={Message}",
+                    request.PlayerId,
+                    request.PackageId,
+                    ex.StripeError?.Code,
+                    ex.StripeError?.Type,
+                    (int?)ex.HttpStatusCode,
+                    ex.StripeError?.Message ?? ex.Message);
+
+                // In development, surface the real Stripe error so you can debug it fast.
+                // In production this remains a generic message.
+                var userMessage = _env.IsDevelopment()
+                    ? $"[DEV] Stripe error ({ex.StripeError?.Code ?? ex.HttpStatusCode.ToString()}): {ex.StripeError?.Message ?? ex.Message}"
+                    : "Payment provider error. Please try again.";
+
+                return StatusCode(502, userMessage);
             }
 
             // Persist a pending transaction record immediately
