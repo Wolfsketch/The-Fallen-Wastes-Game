@@ -234,16 +234,19 @@ namespace TheFallenWastes_WebAPI.Controllers
         }
 
         // ── Found new settlement ───────────────────────────────────────────
+        // Instead of creating the settlement instantly, dispatches a 12-hour founding convoy.
+        // Units are deducted from the source settlement immediately. When the operation
+        // resolves in OperationsController, the new settlement is created with the convoy units.
         [HttpPost("found")]
         public async Task<IActionResult> FoundSettlement([FromBody] FoundSettlementRequest req)
         {
+            if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Trim().Length < 3 || req.Name.Trim().Length > 40)
+                return BadRequest("Settlement name must be 3–40 characters.");
+
             var player = await _db.Players
                 .Include(p => p.Settlements)
                 .FirstOrDefaultAsync(p => p.Id == req.PlayerId);
             if (player == null) return NotFound("Player not found.");
-
-            if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length < 3 || req.Name.Length > 40)
-                return BadRequest("Settlement name must be 3–40 characters.");
 
             if (player.Settlements.Count >= player.MaxSettlements)
             {
@@ -258,18 +261,81 @@ namespace TheFallenWastes_WebAPI.Controllers
                 });
             }
 
-            var newSettlement = new Settlement(req.Name.Trim(), player.Id);
-            player.AddSettlement(newSettlement);
-            _db.Settlements.Add(newSettlement);
-            EnsureStarterBuildings(newSettlement);
-            await _db.SaveChangesAsync();
-            await RecalculatePlayerScore(player.Id);
+            // Reject if ANY founding convoy is already targeting this sector (from any player)
+            string sectorId = $"sector_{Math.Round(req.SectorX)}_{Math.Round(req.SectorY)}";
+            bool sectorTaken = await _db.Operations.AnyAsync(o =>
+                o.TargetPoiId == sectorId &&
+                o.OperationType == "found_settlement" &&
+                o.Phase != "completed");
+            if (sectorTaken)
+                return BadRequest(new { message = "This location is already claimed by another founding convoy or is currently under construction. Choose a different sector." });
 
-            return Ok(new { newSettlement.Id, newSettlement.Name, Message = $"Outpost '{newSettlement.Name}' established." });
+            // Reject if a founding convoy is already in flight from this player's settlement
+            bool alreadyFounding = await _db.Operations.AnyAsync(o =>
+                o.AttackerSettlementId == req.SourceSettlementId &&
+                o.OperationType == "found_settlement" &&
+                o.Phase != "completed");
+            if (alreadyFounding)
+                return BadRequest(new { message = "A founding convoy is already en route from this settlement." });
+
+            var sourceSettlement = await _db.Settlements
+                .FirstOrDefaultAsync(s => s.Id == req.SourceSettlementId && s.PlayerId == req.PlayerId);
+            if (sourceSettlement == null) return NotFound("Source settlement not found.");
+
+            // Validate convoy — at least 1 unit required
+            var convoy = req.Convoy ?? new Dictionary<string, int>();
+            int totalConvoy = convoy.Where(kvp => kvp.Value > 0).Sum(kvp => kvp.Value);
+            if (totalConvoy < 1)
+                return BadRequest("You must send at least 1 unit as a founding convoy.");
+
+            foreach (var (unit, qty) in convoy)
+            {
+                if (qty <= 0) continue;
+                sourceSettlement.UnitInventory.TryGetValue(unit, out int available);
+                if (available < qty)
+                    return BadRequest($"Not enough {unit} — you have {available}, convoy needs {qty}.");
+            }
+
+            // Deduct convoy units from source settlement
+            foreach (var (unit, qty) in convoy)
+            {
+                if (qty <= 0) continue;
+                sourceSettlement.UnitInventory[unit] -= qty;
+                if (sourceSettlement.UnitInventory[unit] <= 0)
+                    sourceSettlement.UnitInventory.Remove(unit);
+            }
+            _db.Entry(sourceSettlement).Property(s => s.UnitInventory).IsModified = true;
+
+            // Create the founding operation — travel time from frontend, then 12h build after arrival
+            int travelSeconds = Math.Clamp(req.TravelSeconds, 60, 7 * 24 * 3600);
+            var convoyJson = System.Text.Json.JsonSerializer.Serialize(
+                convoy.Where(kvp => kvp.Value > 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+            var operation = new Operation(
+                attackerSettlementId: req.SourceSettlementId,
+                targetSettlementId: null,
+                targetPoiId: sectorId,              // sector identifier for conflict detection
+                targetPoiLabel: req.Name.Trim(),    // settlement name
+                operationType: "found_settlement",
+                sentUnitsJson: convoyJson,
+                scoutRareTech: null,
+                raidMode: null,
+                travelSeconds: travelSeconds);
+            _db.Operations.Add(operation);
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                operationId = operation.Id,
+                arrivesAtUtc = operation.ArrivesAtUtc,
+                buildsAtUtc = operation.ArrivesAtUtc.AddHours(12),
+                message = $"Founding convoy dispatched! Convoy arrives in {formatSeconds(travelSeconds)}, then 12 hours to establish '{req.Name.Trim()}'.",
+            });
         }
 
+        static string formatSeconds(int s) => s < 3600 ? $"{s / 60}m" : $"{s / 3600}h {s % 3600 / 60}m";
+
         public record RenameSettlementRequest(string Name);
-        public record FoundSettlementRequest(Guid PlayerId, string Name);
+        public record FoundSettlementRequest(Guid PlayerId, Guid SourceSettlementId, string Name, Dictionary<string, int>? Convoy, int TravelSeconds, double SectorX, double SectorY);
 
         [HttpGet("{id}/queue")]
         public async Task<IActionResult> GetBuildQueue(Guid id)
@@ -1478,7 +1544,6 @@ namespace TheFallenWastes_WebAPI.Controllers
             if (rareTechGained > 0)
             {
                 settlement.AddResourcesCapped(0, 0, 0, 0, 0, rareTechGained);
-                _db.Entry(settlement).Property(s => s.Resources).IsModified = true;
             }
 
             await _db.SaveChangesAsync();

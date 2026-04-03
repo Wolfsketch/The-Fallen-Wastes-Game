@@ -298,8 +298,8 @@ export async function renameSettlement(settlementId, name, playerId) {
     return response.data
 }
 
-export async function foundSettlement(playerId, name) {
-    const response = await api.post('/Settlements/found', { playerId, name })
+export async function foundSettlement(playerId, sourceSettlementId, name, convoy, travelSeconds, sectorX, sectorY) {
+    const response = await api.post('/Settlements/found', { playerId, sourceSettlementId, name, convoy, travelSeconds, sectorX, sectorY })
     return response.data
 }
 

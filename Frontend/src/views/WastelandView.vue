@@ -76,11 +76,11 @@
                 <div v-for="op in allMovements.filter(o => o.phase === 'outbound')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">
-                    {{ op.operationType?.includes('scout') ? '👁' : (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}
+                    {{ op.operationType === 'found_settlement' ? '🏗' : op.operationType?.includes('scout') ? '👁' : (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}
                   </div>
                   <div class="movement-info">
-                    <div class="movement-target">{{ op.poiLabel ?? op.poiId ?? 'Settlement' }}</div>
-                    <div class="movement-units">{{ op.operationType?.includes('scout') ? 'Scout' : (op.unitSummary ?? '—') }}</div>
+                    <div class="movement-target">{{ op.operationType === 'found_settlement' ? `Founding: ${op.targetPoiLabel ?? op.poiLabel ?? '?'}` : (op.poiLabel ?? op.poiId ?? 'Settlement') }}</div>
+                    <div class="movement-units">{{ op.operationType === 'found_settlement' ? 'Founding Convoy' : op.operationType?.includes('scout') ? 'Scout' : (op.unitSummary ?? '—') }}</div>
                   </div>
                   <div class="movement-right">
                     <div class="movement-status status--outbound">→</div>
@@ -97,10 +97,10 @@
                 </div>
               </template>
 
-              <!-- PRESENT (troops only, no scouts) -->
-              <template v-if="allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout')).length > 0">
+              <!-- PRESENT (troops only, no scouts, no founding) -->
+              <template v-if="allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout') && o.operationType !== 'found_settlement').length > 0">
                 <div class="movements-section-title">PRESENT ●</div>
-                <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout'))"
+                <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && !o.operationType?.includes('scout') && o.operationType !== 'found_settlement')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">{{ (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}</div>
                   <div class="movement-info">
@@ -122,6 +122,25 @@
                     @click.stop="recallTroops(op)"
                     title="Return troops"
                   >↩</button>
+                </div>
+              </template>
+
+              <!-- BUILDING (founding convoys under construction) -->
+              <template v-if="allMovements.filter(o => o.phase === 'arrived' && o.operationType === 'found_settlement').length > 0">
+                <div class="movements-section-title">🏗 BUILDING</div>
+                <div v-for="op in allMovements.filter(o => o.phase === 'arrived' && o.operationType === 'found_settlement')"
+                     :key="op.id" class="movement-row">
+                  <div class="movement-icon">🏗</div>
+                  <div class="movement-info">
+                    <div class="movement-target">{{ op.targetPoiLabel ?? '?' }}</div>
+                    <div class="movement-units">Constructing outpost...</div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status" style="color:var(--amber)">⧖</div>
+                    <div class="movement-time" style="color:var(--amber)">
+                      {{ formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() + 12*3600*1000 - Date.now()) / 1000))) }} left
+                    </div>
+                  </div>
                 </div>
               </template>
 
@@ -601,17 +620,15 @@
     <!-- Claim / Found Outpost modal -->
     <transition name="modal-fade">
       <div v-if="claimModal.open" class="modal-backdrop" @click.self="claimModal.open = false">
-        <div class="wl-modal">
+        <div class="modal-box modal-box--wide">
           <div class="modal-header">
             <span class="modal-title">🏗 CLAIM SECTOR — FOUND OUTPOST</span>
             <button class="modal-close" @click="claimModal.open = false">✕</button>
           </div>
-          <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
-            <div style="font-size:11px;color:var(--muted);line-height:1.5">
-              Claim this sector to establish a new outpost. Name your settlement, then confirm.
-            </div>
-            <div>
-              <div class="modal-label" style="margin-bottom:6px">OUTPOST NAME</div>
+          <div class="modal-body">
+            <div class="modal-target">Target: <strong style="color:var(--amber)">Unclaimed Sector</strong></div>
+            <div class="modal-row">
+              <label class="modal-label">OUTPOST NAME</label>
               <input
                 class="modal-input"
                 style="width:100%;box-sizing:border-box"
@@ -621,17 +638,41 @@
                 @keyup.enter="confirmClaim"
               />
             </div>
-            <div style="font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px">
-              After founding, open the Wasteland map and use the sector to send a troop convoy and resources.
+            <div class="modal-row">
+              <label class="modal-label">FOUNDING CONVOY <span style="color:var(--muted);font-size:10px;font-weight:400">(min. 1 unit required)</span></label>
+              <div v-if="ownedUnits.length === 0" class="modal-hint">No units available in inventory.</div>
+              <div v-else class="modal-unit-list">
+                <div v-for="u in ownedUnits" :key="u.name" class="modal-unit-row">
+                  <img v-if="getUnitImage(u.name)" :src="getUnitImage(u.name)" class="modal-unit-img" :alt="u.name" />
+                  <span class="modal-unit-name">{{ u.name }}</span>
+                  <span class="modal-unit-avail">{{ u.qty }} avail</span>
+                  <div class="modal-input-row">
+                    <button class="qty-btn" @click="claimModal.convoy[u.name] = Math.max(0, (claimModal.convoy[u.name] || 0) - 1)">−</button>
+                    <input class="modal-input modal-input--sm" type="number" min="0" :max="u.qty"
+                           :value="claimModal.convoy[u.name] || 0"
+                           @input="claimModal.convoy[u.name] = Math.min(u.qty, Math.max(0, +$event.target.value))" />
+                    <button class="qty-btn" @click="claimModal.convoy[u.name] = Math.min(u.qty, (claimModal.convoy[u.name] || 0) + 1)">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-hint">Total selected: {{ Object.values(claimModal.convoy).reduce((s, v) => s + (v || 0), 0) }}</div>
+              <div class="modal-vault-info" style="margin-top:8px">
+                <span class="modal-label">TRAVEL TIME</span>
+                <span class="modal-value">{{ claimTravelSeconds ? formatTravelTime(claimTravelSeconds) : '—' }}</span>
+              </div>
+              <div class="modal-vault-info">
+                <span class="modal-label">BUILD TIME</span>
+                <span class="modal-value">12h after arrival</span>
+              </div>
             </div>
             <div v-if="claimModal.error" class="modal-error-msg">{{ claimModal.error }}</div>
           </div>
           <div class="modal-footer">
             <button class="modal-cancel" @click="claimModal.open = false">CANCEL</button>
             <button class="modal-confirm"
-              :disabled="claimModal.loading || claimModal.name.trim().length < 3"
+              :disabled="claimModal.loading || claimModal.name.trim().length < 3 || Object.values(claimModal.convoy).reduce((a, b) => a + (b || 0), 0) < 1"
               @click="confirmClaim">
-              {{ claimModal.loading ? 'FOUNDING...' : '🏗 FOUND OUTPOST' }}
+              {{ claimModal.loading ? 'DISPATCHING...' : '🏗 DISPATCH CONVOY' }}
             </button>
           </div>
         </div>
@@ -924,6 +965,19 @@ const UNIT_SPEEDS = {
   'Convoy': 5, 'Settler Convoy': 5
 }
 const REFERENCE_SPEED = 12
+
+const claimTravelSeconds = computed(() => {
+  if (!claimModal.value.open) return null
+  const own = slots.value.find(s => s.status === 'yours')
+  if (!own) return null
+  const dist = Math.sqrt(Math.pow(claimModal.value.sectorX - own.x, 2) + Math.pow(claimModal.value.sectorY - own.y, 2))
+  const selected = Object.entries(claimModal.value.convoy)
+    .filter(([, qty]) => (qty || 0) > 0)
+    .map(([name]) => UNIT_SPEEDS[name] ?? REFERENCE_SPEED)
+  if (selected.length === 0) return Math.max(30, Math.round(dist * 0.3))
+  const slowest = Math.min(...selected)
+  return Math.max(30, Math.round(dist * 0.3 / (slowest / REFERENCE_SPEED)))
+})
 
 const estimatedTravelSeconds = computed(() => {
   const own = slots.value.find(s => s.status === 'yours')
@@ -1369,7 +1423,7 @@ async function recallTroops(op) {
 }
 
 // ── Claim sector ──────────────────────────────────────────────────────────────
-const claimModal = ref({ open: false, name: '', loading: false, error: '' })
+const claimModal = ref({ open: false, name: '', loading: false, error: '', convoy: {} })
 const wlToast = ref({ show: false, message: '', type: 'info' })
 let wlToastTimer = null
 
@@ -1395,22 +1449,35 @@ function openClaimModal() {
     )
     return
   }
-  claimModal.value = { open: true, name: '', loading: false, error: '' }
+  claimModal.value = { open: true, name: '', loading: false, error: '', convoy: {}, sectorX: sel.value?.x ?? 0, sectorY: sel.value?.y ?? 0 }
 }
 
 async function confirmClaim() {
   const name = claimModal.value.name.trim()
   if (name.length < 3) { claimModal.value.error = 'Name must be at least 3 characters.'; return }
   if (!props.player?.id) { claimModal.value.error = 'Player data not available.'; return }
+  if (!props.settlement?.id) { claimModal.value.error = 'Source settlement not found.'; return }
+
+  const convoy = Object.fromEntries(
+    Object.entries(claimModal.value.convoy).filter(([, v]) => (v ?? 0) > 0)
+  )
+  const totalConvoy = Object.values(convoy).reduce((a, b) => a + (b || 0), 0)
+  if (totalConvoy < 1) { claimModal.value.error = 'You must send at least 1 unit in the founding convoy.'; return }
 
   claimModal.value.loading = true
   claimModal.value.error = ''
   try {
-    await foundSettlement(props.player.id, name)
+    await foundSettlement(
+      props.player.id,
+      props.settlement.id,
+      name,
+      convoy,
+      claimTravelSeconds.value ?? 3600,
+      claimModal.value.sectorX,
+      claimModal.value.sectorY
+    )
     claimModal.value.open = false
-    showWlToast(`Outpost '${name}' founded! Head back to your Camp to manage it.`, 'success', 5000)
-    if (props.refreshSettlement) await props.refreshSettlement()
-    await reloadMap()
+    showWlToast(`Founding convoy dispatched! '${name}' will be established after arrival + 12h construction.`, 'success', 6000)
   } catch (e) {
     const msg = e?.response?.data?.message ?? e?.response?.data ?? 'Could not found outpost.'
     claimModal.value.error = typeof msg === 'string' ? msg : JSON.stringify(msg)

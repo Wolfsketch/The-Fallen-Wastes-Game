@@ -789,20 +789,74 @@ namespace TheFallenWastes_WebAPI.Controllers
 
                     op.MarkArrived();
                     // Scout: immediately start returning so it doesn't clutter movements panel.
-                    // Frontend reads resultJson from the 24h window filter.
                     if (op.OperationType == "scout_poi")
                     {
                         int returnSeconds = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                         op.MarkReturning(returnSeconds);
                     }
-                    // Settlement attack: troops automatically return — UNLESS a siege was started
-                    // or this is a reinforcement operation (which stays until recalled).
+                    // Settlement attack: troops automatically return — UNLESS a siege was started.
                     if (op.OperationType == "attack_settlement" && !siegeStarted)
                     {
                         int returnSecs = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                         op.MarkReturning(returnSecs);
                     }
-                    // reinforce_settlement stays in "arrived" until player recalls it.
+                    // found_settlement: convoy landed — building timer now runs (see arrived block below).
+                    // reinforce_settlement stays "arrived" until recalled.
+                }
+                else if (op.Phase == "arrived" && op.OperationType == "found_settlement"
+                    && op.ResultJson == null)
+                {
+                    // Convoy landed. Create the settlement once the 12-hour build timer elapses.
+                    var buildEndsAt = op.ArrivesAtUtc.AddHours(12);
+                    if (now >= buildEndsAt)
+                    {
+                        string newSettlementName = op.TargetPoiLabel ?? "New Outpost";
+                        if (settlementToPlayer.TryGetValue(op.AttackerSettlementId, out var foundingPlayerId))
+                        {
+                            var foundingPlayer = await _db.Players
+                                .Include(p => p.Settlements)
+                                .FirstOrDefaultAsync(p => p.Id == foundingPlayerId);
+                            if (foundingPlayer != null && foundingPlayer.Settlements.Count < foundingPlayer.MaxSettlements)
+                            {
+                                var newSett = new Settlement(newSettlementName, foundingPlayer.Id);
+                                _db.Settlements.Add(newSett);
+                                foundingPlayer.Settlements.Add(newSett);
+
+                                foreach (var kvp in BuildingDefinitions.StarterBuildingLevels)
+                                {
+                                    var b = Building.CreateAtLevel(newSett.Id, kvp.Key, kvp.Value);
+                                    newSett.Buildings.Add(b);
+                                    _db.Buildings.Add(b);
+                                }
+
+                                if (!string.IsNullOrEmpty(op.SentUnitsJson))
+                                {
+                                    var convoyUnits = JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson);
+                                    if (convoyUnits != null)
+                                        foreach (var (unit, qty) in convoyUnits)
+                                            if (qty > 0)
+                                            {
+                                                newSett.UnitInventory.TryGetValue(unit, out int ex);
+                                                newSett.UnitInventory[unit] = ex + qty;
+                                            }
+                                }
+
+                                op.MarkCompleted(JsonSerializer.Serialize(new
+                                {
+                                    isFounding = true,
+                                    settlementId = newSett.Id,
+                                    settlementName = newSett.Name
+                                }));
+
+                                _db.Messages.Add(new Message(
+                                    senderPlayerId: foundingPlayerId,
+                                    receiverPlayerId: foundingPlayerId,
+                                    subject: $"\U0001f3d7 Outpost Established \u2014 {newSettlementName}",
+                                    body: $"Construction is complete. The outpost '{newSettlementName}' is now operational and ready for development.",
+                                    messageType: "notification"));
+                            }
+                        }
+                    }
                 }
                 else if (op.Phase == "arrived" && op.OperationType == "attack_settlement"
                     && op.ResultJson == null && op.TargetSettlementId.HasValue)

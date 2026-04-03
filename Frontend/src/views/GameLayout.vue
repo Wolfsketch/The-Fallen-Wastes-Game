@@ -797,8 +797,9 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.04));
+  background: linear-gradient(90deg, rgba(0, 213, 255, 0.062), rgba(0, 213, 255, 0.068));
   transition: width 1s;
+  border-right: 1px solid rgba(0, 212, 255, 0.25);
 }
 
 .resource-icon {
@@ -826,8 +827,9 @@ onUnmounted(() => {
 }
 
 .resource-rate {
-  font-size: 8px;
-  color: var(--cyan-dark);
+  font-size: 10px;
+  color: var(--green);
+  text-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
 }
 
 .resource-values {
@@ -851,7 +853,7 @@ onUnmounted(() => {
 }
 
 .resource-bar-mini {
-  height: 2px;
+  height: 3px;
   background: var(--border);
   margin-top: 4px;
   border-radius: 1px;
