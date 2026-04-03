@@ -40,6 +40,7 @@ namespace TheFallenWastes_Infrastructure
         public DbSet<BugReport> BugReports { get; set; }
         public DbSet<ForumTopic> ForumTopics { get; set; }
         public DbSet<ForumPost> ForumPosts { get; set; }
+        public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
         public GameDbContext(DbContextOptions<GameDbContext> options)
             : base(options)
@@ -450,6 +451,35 @@ namespace TheFallenWastes_Infrastructure
                 entity.HasIndex(x => new { x.SettlementId, x.Status });
                 entity.HasIndex(x => x.AttackerPlayerId);
                 entity.HasIndex(x => x.DefenderPlayerId);
+            });
+
+            // ----------------------------
+            // PAYMENT TRANSACTIONS
+            // ----------------------------
+
+            modelBuilder.Entity<PaymentTransaction>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.PackageId)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.Status)
+                    .IsRequired()
+                    .HasMaxLength(20);
+
+                entity.Property(x => x.StripePaymentIntentId)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.Property(x => x.StripeEventId)
+                    .HasMaxLength(200);
+
+                // Fast lookup by PaymentIntent ID and by Stripe event ID (idempotency)
+                entity.HasIndex(x => x.StripePaymentIntentId).IsUnique();
+                entity.HasIndex(x => x.StripeEventId);
+                entity.HasIndex(x => x.PlayerId);
             });
         }
     }

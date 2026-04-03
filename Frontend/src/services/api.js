@@ -62,6 +62,18 @@ export async function purchaseWastelandCoins(playerId, packageId) {
     return response.data
 }
 
+// ── Stripe Payments ───────────────────────────────
+
+export async function getStripePublishableKey() {
+    const response = await api.get('/Payment/publishable-key')
+    return response.data.publishableKey
+}
+
+export async function createPaymentIntent(playerId, packageId) {
+    const response = await api.post('/Payment/create-intent', { playerId, packageId })
+    return response.data // { clientSecret, paymentIntentId }
+}
+
 export async function organizeTriumph(playerId) {
     const response = await api.post(`/Players/${playerId}/triumph`)
     return response.data

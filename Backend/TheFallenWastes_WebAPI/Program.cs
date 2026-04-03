@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 using TheFallenWastes_Infrastructure;
 using TheFallenWastes_Application;
 
@@ -20,6 +21,9 @@ namespace TheFallenWastes_WebAPI
                 });
 
             builder.Services.AddScoped<PlayerDataMigrationService>();
+
+            // Configure Stripe with secret key from config
+            StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
             builder.Services.AddDbContext<GameDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -66,6 +70,13 @@ namespace TheFallenWastes_WebAPI
             }
 
             app.UseHttpsRedirection();
+
+            // Allow raw body re-reading in the Stripe webhook endpoint
+            app.Use(async (context, next) =>
+            {
+                context.Request.EnableBuffering();
+                await next();
+            });
 
             app.UseCors();
 
