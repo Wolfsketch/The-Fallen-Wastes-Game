@@ -52,7 +52,7 @@
             </template>
           </div>
 
-          <button
+      <button
               class="adv-activate-btn"
               :class="{
                 'adv-activate-btn--active': adv.active,
@@ -61,10 +61,10 @@
               @click.stop="$emit('activate', adv.id)"
           >
             <template v-if="adv.active">
-              EXTEND — {{ adv.cost }} 💎
+              EXTEND &mdash; {{ adv.cost }}&nbsp;<img :src="colaIcon" class="advisor-cola-icon" alt="Cola" />
             </template>
             <template v-else>
-              ACTIVATE — {{ adv.cost }} 💎
+              ACTIVATE &mdash; {{ adv.cost }}&nbsp;<img :src="colaIcon" class="advisor-cola-icon" alt="Cola" />
             </template>
           </button>
         </div>
@@ -105,6 +105,10 @@
       </div>
 
       <div class="modal-footer">
+        <div class="footer-cola-balance">
+          <img :src="colaIcon" class="footer-cola-icon" alt="Cola" />
+          <span class="footer-cola-amt">{{ wastelandCoins.toLocaleString() }} Wasteland Cola</span>
+        </div>
         <div class="footer-note">
           Premium advisors will automatically renew unless deactivated. All bonuses apply settlement-wide.
         </div>
@@ -115,10 +119,12 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import colaIcon from '../images/Currency/Wasteland Cola.png'
 
 const props = defineProps({
   advisor: Object,
-  advisors: Array
+  advisors: Array,
+  wastelandCoins: { type: Number, default: 0 }
 })
 
 defineEmits(['close', 'activate'])
@@ -515,6 +521,29 @@ const selectedAdvisor = computed(() =>
 .modal-footer{
   padding:12px 24px;
   border-top:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+
+.footer-cola-balance{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.footer-cola-icon{
+  width:20px;
+  height:20px;
+  object-fit:contain;
+}
+
+.footer-cola-amt{
+  font-family:var(--ff-title),sans-serif;
+  font-size:12px;
+  color:#ffa600;
+  letter-spacing:1px;
 }
 
 .footer-note{
@@ -522,6 +551,14 @@ const selectedAdvisor = computed(() =>
   color:var(--muted);
   text-align:center;
   letter-spacing:.5px;
+}
+
+.advisor-cola-icon{
+  width:14px;
+  height:14px;
+  object-fit:contain;
+  vertical-align:middle;
+  margin-bottom:1px;
 }
 
 /* ═══ RESPONSIVE ═══ */

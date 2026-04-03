@@ -40,6 +40,18 @@
             @refresh="refreshGameData"
         />
 
+        <button class="tb-cola-btn" @click="showColaShop = true" title="Wasteland Cola — click to buy more">
+          <img :src="colaIcon" class="tb-cola-icon" alt="Cola" />
+          <span class="tb-cola-amt">{{ (player?.wastelandCoins ?? 0).toLocaleString() }}</span>
+        </button>
+
+        <ColaShopModal
+            v-if="showColaShop"
+            :player="player"
+            @close="showColaShop = false"
+            @purchased="refreshGameData"
+        />
+
         <span class="topbar-meta">{{ dateStr }}</span>
         <span class="topbar-clock">{{ timeStr }}</span>
         <span class="topbar-status">● CONNECTED</span>
@@ -210,6 +222,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPlayerById, getSettlement, getUnreadMessageCount } from '../services/api'
 import AdvisorBar from '../components/AdvisorBar.vue'
+import ColaShopModal from '../components/ColaShopModal.vue'
+import colaIcon from '../images/Currency/Wasteland Cola.png'
 
 const router = useRouter()
 
@@ -219,6 +233,7 @@ const allSettlements = ref([])
 const settlementMenuOpen = ref(false)
 const settlementMenuRef = ref(null)
 const showSettlementModal = ref(false)
+const showColaShop = ref(false)
 const time = ref(new Date())
 const unreadMessagesCount = ref(0)
 const underAttack = ref(false)
@@ -476,6 +491,7 @@ function setPlayerData(data) {
     conquestLevel: data.conquestLevel ?? 1,
     maxSettlements: data.maxSettlements ?? 1,
     triumphPointsForNextLevel: data.triumphPointsForNextLevel ?? 3,
+    wastelandCoins: data.wastelandCoins ?? 0,
     advisors: {
       commander: data.advisors?.commander ?? { active: false, expiresUtc: null },
       quartermaster: data.advisors?.quartermaster ?? { active: false, expiresUtc: null },
@@ -768,6 +784,35 @@ onUnmounted(() => {
 .topbar-status {
   color: var(--green);
   font-size: 9px;
+}
+
+.tb-cola-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 5px;
+  background: rgba(255, 166, 0, 0.08);
+  border: 1px solid rgba(255, 166, 0, 0.35);
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.tb-cola-btn:hover {
+  background: rgba(255, 166, 0, 0.16);
+  border-color: rgba(255, 166, 0, 0.7);
+  box-shadow: 0 0 8px rgba(255, 166, 0, 0.2);
+}
+.tb-cola-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+.tb-cola-amt {
+  color: #ffa600;
+  font-family: var(--ff-title), sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(255, 166, 0, 0.4);
 }
 
 .resource-bar {

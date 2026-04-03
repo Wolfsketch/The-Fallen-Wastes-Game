@@ -56,6 +56,12 @@ export async function deactivateAdvisor(playerId, advisorId) {
     const response = await api.post(`/Players/${playerId}/advisors/${advisorId}/deactivate`)
     return response.data
 }
+
+export async function purchaseWastelandCoins(playerId, packageId) {
+    const response = await api.post(`/Players/${playerId}/purchase-coins`, { packageId })
+    return response.data
+}
+
 export async function organizeTriumph(playerId) {
     const response = await api.post(`/Players/${playerId}/triumph`)
     return response.data

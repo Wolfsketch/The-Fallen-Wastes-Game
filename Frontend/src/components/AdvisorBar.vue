@@ -30,6 +30,7 @@
           v-if="selectedAdvisor"
           :advisor="selectedAdvisor"
           :advisors="advisors"
+          :wasteland-coins="props.player?.wastelandCoins ?? 0"
           @close="selectedAdvisor = null"
           @activate="onActivate"
       />
@@ -157,6 +158,12 @@ function openAdvisor(adv) {
 
 async function onActivate(advisorId) {
   if (!props.player?.id) return
+
+  const cost = 100
+  if ((props.player.wastelandCoins ?? 0) < cost) {
+    console.warn('Not enough Wasteland Cola to activate advisor.')
+    return
+  }
 
   try {
     await activateAdvisor(props.player.id, advisorId, 14)
