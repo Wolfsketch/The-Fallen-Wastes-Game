@@ -45,12 +45,14 @@
           <span class="tb-cola-amt">{{ (player?.wastelandCoins ?? 0).toLocaleString() }}</span>
         </button>
 
-        <ColaShopModal
-            v-if="showColaShop"
-            :player="player"
-            @close="showColaShop = false"
-            @purchased="refreshGameData"
-        />
+        <Teleport to="body">
+          <ColaShopModal
+              v-if="showColaShop"
+              :player="player"
+              @close="showColaShop = false"
+              @purchased="refreshGameData"
+          />
+        </Teleport>
 
         <span class="topbar-meta">{{ dateStr }}</span>
         <span class="topbar-clock">{{ timeStr }}</span>
