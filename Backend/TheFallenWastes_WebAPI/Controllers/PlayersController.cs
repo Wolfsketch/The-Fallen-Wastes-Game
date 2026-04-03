@@ -132,6 +132,10 @@ namespace TheFallenWastes_WebAPI.Controllers
             var durationDays = request?.DurationDays > 0 ? request.DurationDays : 14;
             var duration = TimeSpan.FromDays(durationDays);
 
+            const int advisorCost = 100;
+            if (player.WastelandCoins < advisorCost)
+                return BadRequest($"Not enough Wasteland Cola. You need {advisorCost} Cola to activate an advisor.");
+
             switch (advisorId.Trim().ToLowerInvariant())
             {
                 case "commander":
@@ -162,11 +166,14 @@ namespace TheFallenWastes_WebAPI.Controllers
                     return BadRequest("Unknown advisor.");
             }
 
+            player.SpendWastelandCoins(advisorCost);
+
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 Message = $"{advisorId} activated for {durationDays} days.",
+                player.WastelandCoins,
                 Advisors = MapAdvisors(player)
             });
         }
@@ -216,6 +223,34 @@ namespace TheFallenWastes_WebAPI.Controllers
                 Message = $"{advisorId} deactivated.",
                 Advisors = MapAdvisors(player)
             });
+        }
+
+        // ════════════════════════════════════════════
+        // PURCHASE WASTELAND COINS
+        // ════════════════════════════════════════════
+
+        private static readonly Dictionary<string, int> _coinPackages = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["starter"]    = 500,
+            ["scout"]      = 1_500,
+            ["commander"]  = 4_000,
+            ["warlord"]    = 12_500,
+            ["overlord"]   = 25_000,
+        };
+
+        [HttpPost("{id}/purchase-coins")]
+        public async Task<IActionResult> PurchaseCoins(Guid id, [FromBody] PurchaseCoinsRequest request)
+        {
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == id);
+            if (player == null) return NotFound("Player not found.");
+
+            if (!_coinPackages.TryGetValue(request.PackageId ?? "", out int amount))
+                return BadRequest("Unknown package. Valid: starter, scout, commander, warlord, overlord.");
+
+            player.AddWastelandCoins(amount);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { player.WastelandCoins, Granted = amount });
         }
 
         // ════════════════════════════════════════════
@@ -421,6 +456,7 @@ namespace TheFallenWastes_WebAPI.Controllers
                 MaxSettlements = player.MaxSettlements,
                 TriumphPointsForNextLevel = player.TriumphPointsForNextLevel,
                 player.DataVersion,
+                player.WastelandCoins,
                 WasMigrated = wasMigrated,
                 Advisors = MapAdvisors(player),
                 Settlements = includeSettlements
@@ -492,5 +528,10 @@ namespace TheFallenWastes_WebAPI.Controllers
     public class ActivateAdvisorRequest
     {
         public int DurationDays { get; set; } = 14;
+    }
+
+    public class PurchaseCoinsRequest
+    {
+        public string? PackageId { get; set; }
     }
 }

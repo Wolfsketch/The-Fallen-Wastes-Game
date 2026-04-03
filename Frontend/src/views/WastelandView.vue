@@ -7,13 +7,13 @@
       </div>
       <div class="tb-center">[ {{ viewX }}, {{ viewY }} ] — {{ claimedCount }}/{{ slots.length }} claimed</div>
       <div class="tb-right">
-        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0 || incomingOps.length > 0">
+        <div class="tb-movements" v-if="operations.length > 0 || activeOperations.length > 0 || incomingOps.length > 0 || incomingTradeOps.length > 0">
           <button class="tb-btn tb-movements-btn"
                   @click="showMovementsPanel = !showMovementsPanel"
                   :class="{ 'tb-movements-btn--active': showMovementsPanel }">
             <span style="font-size:11px">⚡</span>
             <span style="font-size:11px;font-family:var(--ff-title);font-weight:700">
-              {{ allMovements.length + incomingOps.length }}
+              {{ allMovements.length + incomingOps.length + incomingTradeOps.length }}
             </span>
             <span v-if="incomingOps.length > 0" class="movements-incoming-badge">{{ incomingOps.length }}</span>
           </button>
@@ -70,17 +70,37 @@
                 </div>
               </template>
 
+              <!-- INCOMING TRADE CONVOYS -->
+              <template v-if="incomingTradeOps.length > 0">
+                <div class="movements-section-title movements-section-title--trade">📦 INCOMING TRADE</div>
+                <div v-for="op in incomingTradeOps" :key="'trade-'+op.id" class="movement-row movement-row--trade" @click="focusOperation(op)">
+                  <div class="movement-icon">📦</div>
+                  <div class="movement-info">
+                    <div class="movement-target" style="color:var(--green)">{{ op.playerName ?? 'Unknown' }}</div>
+                    <div class="movement-units" style="color:var(--muted)">
+                      {{ op.sentResources ? Object.entries(op.sentResources).filter(([,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(', ') : 'Resources' }}
+                    </div>
+                  </div>
+                  <div class="movement-right">
+                    <div class="movement-status" style="color:var(--green)">→</div>
+                    <div class="movement-time" style="color:var(--green)">
+                      {{ op.arrivesAtUtc ? formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() - Date.now()) / 1000))) : '—' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
               <!-- EN ROUTE -->
               <template v-if="allMovements.filter(o => o.phase === 'outbound').length > 0">
                 <div class="movements-section-title">EN ROUTE →</div>
                 <div v-for="op in allMovements.filter(o => o.phase === 'outbound')"
                      :key="op.id" class="movement-row" @click="focusOperation(op)">
                   <div class="movement-icon">
-                    {{ op.operationType === 'found_settlement' ? '🏗' : op.operationType?.includes('scout') ? '👁' : (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}
+                    {{ op.operationType === 'send_resources' ? '📦' : op.operationType === 'found_settlement' ? '🏗' : op.operationType?.includes('scout') ? '👁' : (op.operationType === 'reinforce_poi' || op.operationType === 'reinforce_settlement') ? '⛊' : '⚔' }}
                   </div>
                   <div class="movement-info">
-                    <div class="movement-target">{{ op.operationType === 'found_settlement' ? `Founding: ${op.targetPoiLabel ?? op.poiLabel ?? '?'}` : (op.poiLabel ?? op.poiId ?? 'Settlement') }}</div>
-                    <div class="movement-units">{{ op.operationType === 'found_settlement' ? 'Founding Convoy' : op.operationType?.includes('scout') ? 'Scout' : (op.unitSummary ?? '—') }}</div>
+                    <div class="movement-target">{{ op.operationType === 'send_resources' ? `Trade → ${op.targetPoiLabel ?? 'Settlement'}` : op.operationType === 'found_settlement' ? `Founding: ${op.targetPoiLabel ?? op.poiLabel ?? '?'}` : (op.poiLabel ?? op.poiId ?? 'Settlement') }}</div>
+                    <div class="movement-units">{{ op.operationType === 'send_resources' ? (op.sentResources ? Object.entries(op.sentResources).filter(([,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(', ') : 'Resources') : op.operationType === 'found_settlement' ? 'Founding Convoy' : op.operationType?.includes('scout') ? 'Scout' : (op.unitSummary ?? '—') }}</div>
                   </div>
                   <div class="movement-right">
                     <div class="movement-status status--outbound">→</div>
@@ -302,7 +322,7 @@
           <template v-if="sel.status === 'neutral' || sel.status === 'enemy'">
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv" :class="ownerColor(sel.status)">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
             <div class="sp-actions">
-              <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button><button class="sa sa--reinforce" @click="openReinforceSettlementModal()">⛊ Reinforce</button></div>
+              <div class="sa-w"><button class="sa sa--a" @click="openAttackModal('settlement')">⚔ Attack</button><button class="sa sa--s" @click="openScoutModal('settlement')">👁 Scout</button><button class="sa sa--reinforce" @click="openReinforceSettlementModal()">⛊ Reinforce</button><button class="sa sa--trade" @click="openTradeModal()">📦 Trade</button></div>
               <div class="sa-w sa-w--diplo">
                 <button class="sa sa--m" @click="openMailToSelected">✉ Mail</button>
                 <button v-if="sel.status !== 'enemy'" class="sa sa--e" @click="markAs('Enemy')">⚔ Enemy</button>
@@ -336,13 +356,13 @@
             </div>
           </div>
           <div class="ss-w">
-            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'ssv--available' : 'ssv--unknown'">
-              <span>{{ poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? '0' : (selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???') }}</span>
+            <div class="ss"><div class="ssl">NPC TIER</div><div class="ssv" :class="poiNpcsDefeated(selPoi?.id) ? 'ssv--available' : 'ssv--unknown'">
+              <span>{{ poiNpcsDefeated(selPoi?.id) ? '0' : (selectedPoiScoutResult?.tier ? 'TIER ' + selectedPoiScoutResult.tier : '???') }}</span>
             </div></div>
             <div class="ss"><div class="ssl">LOOT</div><div class="ssv" :class="currentPoiLootCount === 0 ? 'ssv--available' : 'ssv--unknown'">
               <span>{{ currentPoiLootCount !== null ? currentPoiLootCount + ' items' : (selectedPoiScoutResult?.lootItems?.length ? selectedPoiScoutResult.lootItems.length + ' items' : '???') }}</span>
             </div></div>
-            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'ssv--cleared' : (arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available')">{{ poiStates[selPoi?.id]?.isCleared && !ownArrivedAtSelectedPoi ? 'CLEARED' : (arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE') }}</div></div>
+            <div class="ss"><div class="ssl">STATUS</div><div class="ssv" :class="poiNpcsDefeated(selPoi?.id) && !ownArrivedAtSelectedPoi ? 'ssv--cleared' : (arrivedPoiIds.has(selPoi.id) ? 'ssv--active' : 'ssv--available')">{{ poiNpcsDefeated(selPoi?.id) && !ownArrivedAtSelectedPoi ? 'CLEARED' : (arrivedPoiIds.has(selPoi.id) ? 'ACTIVE' : 'AVAILABLE') }}</div></div>
           </div>
           <div v-if="allianceAtPoi(selPoi.id).length > 0" class="poi-alliance-intel">
             <div class="pai-title">◆ ALLIANCE PRESENCE</div>
@@ -380,7 +400,7 @@
               </div>
             </div>
           </div>
-          <div v-if="poiStates[selPoi.id]?.isCleared && !ownArrivedAtSelectedPoi" class="poi-cleared-badge">
+          <div v-if="poiNpcsDefeated(selPoi.id) && !ownArrivedAtSelectedPoi" class="poi-cleared-badge">
             ⏳ CLEARED — Respawning in {{ formatTravelTime(poiStates[selPoi.id]?.respawnInSeconds) }}
           </div>
         </div>
@@ -678,6 +698,79 @@
         </div>
       </div>
     </transition>
+
+    <!-- TRADE MODAL -->
+    <transition name="modal-fade">
+      <div v-if="tradeModal.open" class="modal-backdrop" @click.self="tradeModal.open = false">
+        <div class="modal-box modal-box--trade">
+          <div class="modal-header">
+            <span class="modal-title">📦 SEND RESOURCES</span>
+            <button class="modal-close" @click="tradeModal.open = false">✕</button>
+          </div>
+
+          <div class="trade-meta-bar">
+            <div class="trade-meta-item">
+              <span class="trade-meta-key">TO</span>
+              <span class="trade-meta-val trade-meta-val--target">{{ tradeModal.targetName }}</span>
+            </div>
+            <div class="trade-meta-sep">·</div>
+            <div class="trade-meta-item">
+              <span class="trade-meta-key">ETA</span>
+              <span class="trade-meta-val trade-meta-val--eta">{{ tradeTravelSeconds !== null ? formatTravelTime(tradeTravelSeconds) : '—' }}</span>
+            </div>
+          </div>
+
+          <div class="trade-body">
+            <div v-for="r in tradeResources" :key="r.key" class="trade-res-row">
+              <div class="trade-res-left">
+                <span class="trade-res-icon">{{ r.icon }}</span>
+                <div class="trade-res-text">
+                  <div class="trade-res-name">{{ r.label }}</div>
+                  <div class="trade-res-stock">{{ r.owned.toLocaleString() }} available</div>
+                </div>
+              </div>
+              <div class="trade-res-right">
+                <div class="trade-presets">
+                  <button class="trade-preset" @click="setTradeAmount(r.key, 0)">0</button>
+                  <button class="trade-preset" @click="setTradeAmount(r.key, Math.floor(r.owned * 0.25))">25%</button>
+                  <button class="trade-preset" @click="setTradeAmount(r.key, Math.floor(r.owned * 0.5))">50%</button>
+                  <button class="trade-preset trade-preset--max" @click="setTradeAmount(r.key, r.owned)">MAX</button>
+                </div>
+                <div class="trade-stepper-wrap">
+                  <button class="trade-step" @click="adjustTrade(r.key, -100, r.owned)">−</button>
+                  <input class="trade-input" type="number" min="0" :max="r.owned"
+                    :value="tradeModal[r.key] || 0"
+                    @input="tradeModal[r.key] = Math.min(r.owned, Math.max(0, +$event.target.value))" />
+                  <button class="trade-step" @click="adjustTrade(r.key, 100, r.owned)">+</button>
+                </div>
+              </div>
+              <div class="trade-res-bar-track">
+                <div class="trade-res-bar-fill"
+                  :style="{ width: r.owned > 0 ? Math.min(100,(tradeModal[r.key]||0)/r.owned*100)+'%' : '0%' }"></div>
+              </div>
+            </div>
+
+            <div class="trade-summary">
+              <span class="trade-summary-label">TOTAL</span>
+              <span class="trade-summary-value">
+                {{ (tradeModal.water||0)+(tradeModal.food||0)+(tradeModal.scrap||0)+(tradeModal.fuel||0)+(tradeModal.energy||0)+(tradeModal.rareTech||0) }}
+              </span>
+              <span class="trade-summary-unit">resources</span>
+            </div>
+          </div>
+
+          <div v-if="tradeModal.error" class="modal-error-msg">{{ tradeModal.error }}</div>
+          <div class="modal-footer">
+            <button class="modal-cancel" @click="tradeModal.open = false">CANCEL</button>
+            <button class="modal-confirm"
+              :disabled="tradeModal.loading || (tradeModal.water||0)+(tradeModal.food||0)+(tradeModal.scrap||0)+(tradeModal.fuel||0)+(tradeModal.energy||0)+(tradeModal.rareTech||0) < 1"
+              @click="confirmTrade">
+              {{ tradeModal.loading ? 'DISPATCHING...' : '📦 SEND CONVOY' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -685,7 +778,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createChunkedWorldRenderer } from '../composables/useChunkedMapRenderer.js'
 import { generateSlotsFromElevation, generatePOIsFromElevation } from '../composables/useWorldPlacement.js'
-import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, reinforceSettlement, getPoiStates, recallOperation, foundSettlement } from '../services/api.js'
+import { getWorldSettlements, setPlayerRelation, removePlayerRelation, getSettlementOperations, scoutPoi, scoutSettlement, attackPoi, attackSettlement, reinforcePoi, reinforceSettlement, getPoiStates, recallOperation, foundSettlement, sendResources } from '../services/api.js'
 import { useRouter } from 'vue-router'
 import islandImage from '../images/Island/IslandV2.png'
 const unitImages = import.meta.glob('../images/*.png', { eager: true, import: 'default' })
@@ -1104,6 +1197,103 @@ function confirmRaid() { /* replaced — see confirmAttack */ }
 
 function localOpsKey() { return `localOps_${props.settlement?.id ?? 'unknown'}` }
 
+// Returns true when a POI's NPCs are all dead (isCleared or npcUnits is empty object after init)
+function poiNpcsDefeated(poiId) {
+  if (!poiId) return false
+  const state = poiStates.value[poiId]
+  if (!state) return false
+  if (state.isCleared) return true
+  if (state.npcUnits === null || state.npcUnits === undefined) return false
+  return Object.keys(state.npcUnits).length === 0
+}
+
+function openTradeModal() {
+  tradeModal.value = { open: true, targetName: sel.value?.name ?? sel.value?.owner ?? 'Settlement', water: 0, food: 0, scrap: 0, fuel: 0, energy: 0, rareTech: 0, loading: false, error: '' }
+}
+
+const tradeResources = computed(() => {
+  const s = props.settlement ?? {}
+  return [
+    { key: 'water',   label: 'Water',   icon: '💧', owned: s.water   ?? 0 },
+    { key: 'food',    label: 'Food',    icon: '🥫', owned: s.food    ?? 0 },
+    { key: 'scrap',   label: 'Scrap',   icon: '⚙️', owned: s.scrap   ?? 0 },
+    { key: 'fuel',    label: 'Fuel',    icon: '⛽', owned: s.fuel    ?? 0 },
+    { key: 'energy',  label: 'Energy',  icon: '⚡', owned: s.energy  ?? 0 },
+    { key: 'rareTech',label: 'RareTech',icon: '🔬', owned: s.rareTech ?? 0 },
+  ]
+})
+
+function setTradeAmount(key, val) {
+  tradeModal.value[key] = Math.max(0, val)
+}
+
+function adjustTrade(key, delta, max) {
+  tradeModal.value[key] = Math.min(max, Math.max(0, (tradeModal.value[key] || 0) + delta))
+}
+
+const tradeTravelSeconds = computed(() => {
+  if (!tradeModal.value.open || !sel.value) return 60
+  const own = slots.value.find(s => s.status === 'yours')
+  if (!own) return 60
+  const dist = Math.sqrt(Math.pow(sel.value.x - own.x, 2) + Math.pow(sel.value.y - own.y, 2))
+  return Math.max(30, Math.round(dist * 0.3 / (5 / 12))) // Convoy speed = 5
+})
+
+async function confirmTrade() {
+  const m = tradeModal.value
+  if (!props.settlement?.id || !sel.value?.id) return
+  const total = m.water + m.food + m.scrap + m.fuel + m.energy + m.rareTech
+  if (total <= 0) { m.error = 'Select at least 1 resource to send.'; return }
+  const s = props.settlement ?? {}
+  if ((s.water ?? 0) < m.water || (s.food ?? 0) < m.food || (s.scrap ?? 0) < m.scrap ||
+      (s.fuel ?? 0) < m.fuel || (s.energy ?? 0) < m.energy || (s.rareTech ?? 0) < m.rareTech) {
+    m.error = 'Not enough resources.'; return
+  }
+  m.loading = true; m.error = ''
+  try {
+    const _travelSec = tradeTravelSeconds.value
+    await sendResources(props.settlement.id, sel.value.id, {
+      water: m.water, food: m.food, scrap: m.scrap, fuel: m.fuel, energy: m.energy, rareTech: m.rareTech
+    }, _travelSec)
+    // Inject local op for immediate map line
+    const ownSlotT = slots.value.find(s => s.status === 'yours')
+    if (ownSlotT && sel.value) {
+      const travelMs = _travelSec * 1000
+      operations.value.push({
+        id: 'local-trade-' + Date.now(),
+        phase: 'outbound',
+        operationType: 'send_resources',
+        originX: ownSlotT.x, originY: ownSlotT.y,
+        destX: sel.value.x, destY: sel.value.y,
+        startTime: Date.now(),
+        travelDuration: travelMs,
+        arrivesAtUtc: new Date(Date.now() + travelMs).toISOString(),
+        isOwn: true,
+        isAlliance: false,
+        poiId: null,
+        targetSettlementId: sel.value.id,
+        playerName: props.player?.username ?? 'You',
+        unitSummary: null,
+        isReinforcement: false,
+        resultJson: null,
+        lootItemsEarned: 0,
+        lootIntervalSeconds: 300,
+        poiLabel: null,
+        targetPoiLabel: sel.value.name,
+        sentResources: { water: m.water, food: m.food, scrap: m.scrap, fuel: m.fuel, energy: m.energy, rareTech: m.rareTech },
+      })
+      renderMap()
+    }
+    tradeModal.value.open = false
+    showWlToast(`Trade convoy dispatched to ${sel.value.name}!`, 'success', 4000)
+    if (props.refreshSettlement) await props.refreshSettlement()
+  } catch (e) {
+    m.error = e?.response?.data?.message ?? e?.response?.data ?? 'Trade failed.'
+  } finally {
+    m.loading = false
+  }
+}
+
 async function loadOperations() {
   if (!props.settlement?.id) return
   loadShownReportIds()
@@ -1179,7 +1369,12 @@ async function loadOperations() {
       raidDurationSeconds: op.raidDurationSeconds ?? op.RaidDurationSeconds ?? 300,
       sentUnits: op.sentUnits ?? op.SentUnits ?? {},
       poiLabel: op.targetPoiLabel ?? op.TargetPoiLabel ?? op.targetPoiId ?? null,
+      targetPoiLabel: op.targetPoiLabel ?? op.TargetPoiLabel ?? null,
       returnsAtUtc: utcStr(op.returnsAtUtc ?? op.ReturnsAtUtc ?? null),
+      // For trade convoys: parse resources from sentUnits
+      sentResources: op.operationType === 'send_resources' && op.sentUnits
+        ? op.sentUnits
+        : null,
     }))
 
     // Keep currently-animating outbound ops not yet in the new data
@@ -1278,7 +1473,11 @@ function resolveOperationCoords() {
       const attackerSlot = slots.value.find(s => s.id === op.attackerSettlementId)
       if (attackerSlot) { op.originX = attackerSlot.x; op.originY = attackerSlot.y }
     }
-    if (op.poiId) {
+    if (op.operationType === 'found_settlement' && op.poiId?.startsWith('sector_')) {
+      // poiId format: "sector_X_Y" — parse world coordinates directly
+      const parts = op.poiId.split('_')
+      if (parts.length === 3) { op.destX = parseFloat(parts[1]); op.destY = parseFloat(parts[2]) }
+    } else if (op.poiId) {
       const poi = pois.value.find(p => p.id === op.poiId)
       if (poi) { op.destX = poi.x; op.destY = poi.y }
     } else if (op.targetSettlementId) {
@@ -1424,6 +1623,7 @@ async function recallTroops(op) {
 
 // ── Claim sector ──────────────────────────────────────────────────────────────
 const claimModal = ref({ open: false, name: '', loading: false, error: '', convoy: {} })
+const tradeModal = ref({ open: false, water: 0, food: 0, scrap: 0, fuel: 0, energy: 0, rareTech: 0, loading: false, error: '' })
 const wlToast = ref({ show: false, message: '', type: 'info' })
 let wlToastTimer = null
 
@@ -1464,6 +1664,16 @@ async function confirmClaim() {
   const totalConvoy = Object.values(convoy).reduce((a, b) => a + (b || 0), 0)
   if (totalConvoy < 1) { claimModal.value.error = 'You must send at least 1 unit in the founding convoy.'; return }
 
+  // Validate resource cost
+  const res = props.settlement?.resources ?? props.settlement?.Resources ?? {}
+  const scrap = res.scrap ?? res.Scrap ?? 0
+  const food = res.food ?? res.Food ?? 0
+  const fuel = res.fuel ?? res.Fuel ?? 0
+  if (scrap < 500 || food < 300 || fuel < 200) {
+    claimModal.value.error = `Not enough resources. Required: 500 Scrap, 300 Food, 200 Fuel. You have: ${scrap} Scrap, ${food} Food, ${fuel} Fuel.`
+    return
+  }
+
   claimModal.value.loading = true
   claimModal.value.error = ''
   try {
@@ -1503,6 +1713,15 @@ const activeOperations = computed(() =>
     // Exclude arrived scout_poi ops — they are done,
     // only kept in 24h window for selectedPoiScoutResult
     !(op.operationType === 'scout_poi' && op.phase === 'arrived')
+  )
+)
+
+const incomingTradeOps = computed(() =>
+  operations.value.filter(op =>
+    !op.isOwn &&
+    op.operationType === 'send_resources' &&
+    op.phase === 'outbound' &&
+    op.targetSettlementId === props.settlement?.id
   )
 )
 
@@ -1774,9 +1993,10 @@ function renderMap() {
   for (const op of operations.value) {
     if (op.phase !== 'outbound' && op.phase !== 'returning') continue
     const isIncomingAttack = !op.isOwn && !op.isAlliance && op.targetSettlementId === props.settlement?.id
-    if (!op.isOwn && !op.isAlliance && !isIncomingAttack) continue
+    const isIncomingTrade = !op.isOwn && op.operationType === 'send_resources' && op.targetSettlementId === props.settlement?.id
+    if (!op.isOwn && !op.isAlliance && !isIncomingAttack && !isIncomingTrade) continue
     if (op.phase === 'returning') _drewReturning++
-    const color = isIncomingAttack ? 'rgba(255,40,40,0.85)' : op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
+    const color = isIncomingTrade ? 'rgba(255,180,0,0.7)' : isIncomingAttack ? 'rgba(255,40,40,0.85)' : op.isReinforcement ? 'rgba(48,255,128,0.6)' : op.isOwn && op.operationType === 'send_resources' ? 'rgba(255,180,0,0.6)' : op.isOwn ? 'rgba(0,212,255,0.6)' : 'rgba(255,48,64,0.6)'
     ctx.save()
     ctx.setLineDash([5 / zoom.value, 7 / zoom.value])
     ctx.lineWidth = 1.5 / zoom.value
@@ -2161,6 +2381,45 @@ onUnmounted(() => {
 .qty-btn:hover{border-color:var(--border-bright);background:rgba(0,212,255,.12)}
 .sa--reinforce{background:rgba(48,255,128,.08);border-color:rgba(48,255,128,.3);color:#30ff80}
 .sa--reinforce:hover{box-shadow:0 0 10px rgba(48,255,128,.2)}
+.sa--trade{background:rgba(255,180,0,.08);border-color:rgba(255,180,0,.3);color:#ffb400}
+.sa--trade:hover{box-shadow:0 0 10px rgba(255,180,0,.2)}
+.movements-section-title--trade{color:#ffb400}
+.movement-row--trade{border-left:2px solid rgba(255,180,0,.4)}
+
+/* ── Trade modal ─────────────────────────────────────────── */
+.modal-box--trade{width:min(560px,96vw);max-width:560px}
+.trade-meta-bar{display:flex;align-items:center;gap:14px;padding:10px 20px 12px;border-bottom:1px solid rgba(0,212,255,.08);background:rgba(0,212,255,.03)}
+.trade-meta-item{display:flex;align-items:center;gap:6px}
+.trade-meta-key{font-family:var(--ff-title);font-size:9px;letter-spacing:1.2px;color:var(--muted)}
+.trade-meta-val{font-family:var(--ff-title);font-size:12px;font-weight:700}
+.trade-meta-val--target{color:var(--green)}
+.trade-meta-val--eta{color:var(--amber)}
+.trade-meta-sep{color:rgba(255,255,255,.2);font-size:18px;line-height:1}
+.trade-body{padding:6px 0;display:flex;flex-direction:column;gap:0}
+.trade-res-row{padding:10px 20px 6px;border-bottom:1px solid rgba(255,255,255,.04);position:relative}
+.trade-res-row:last-of-type{border-bottom:none}
+.trade-res-left{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.trade-res-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
+.trade-res-text{display:flex;flex-direction:column;gap:1px}
+.trade-res-name{font-family:var(--ff-title);font-size:11px;font-weight:700;color:var(--bright);letter-spacing:.6px}
+.trade-res-stock{font-size:10px;color:var(--muted)}
+.trade-res-right{display:flex;align-items:center;gap:10px}
+.trade-presets{display:flex;gap:4px}
+.trade-preset{font-family:var(--ff-title);font-size:9px;letter-spacing:.5px;padding:3px 7px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;border-radius:2px;transition:all .15s}
+.trade-preset:hover{border-color:rgba(0,212,255,.4);color:var(--cyan);background:rgba(0,212,255,.08)}
+.trade-preset--max{border-color:rgba(255,180,0,.3);color:#ffb400;background:rgba(255,180,0,.06)}
+.trade-preset--max:hover{border-color:rgba(255,180,0,.6);background:rgba(255,180,0,.14)}
+.trade-stepper-wrap{display:flex;align-items:center;gap:0;border:1px solid rgba(0,212,255,.2);background:rgba(0,0,0,.35)}
+.trade-step{width:28px;height:28px;border:none;background:rgba(0,212,255,.07);color:var(--cyan);font-size:16px;line-height:1;cursor:pointer;transition:background .15s;flex-shrink:0}
+.trade-step:hover{background:rgba(0,212,255,.18)}
+.trade-input{width:64px;height:28px;border:none;background:transparent;color:var(--bright);font-family:var(--ff-title);font-size:12px;font-weight:700;text-align:center;outline:none}
+.trade-input::-webkit-inner-spin-button,.trade-input::-webkit-outer-spin-button{-webkit-appearance:none}
+.trade-res-bar-track{height:2px;background:rgba(255,255,255,.06);border-radius:1px;margin-top:6px}
+.trade-res-bar-fill{height:100%;background:linear-gradient(90deg,rgba(255,180,0,.5),rgba(255,200,50,.8));border-radius:1px;transition:width .2s ease}
+.trade-summary{display:flex;align-items:center;gap:8px;padding:12px 20px 10px;border-top:1px solid rgba(0,212,255,.1);background:rgba(0,212,255,.02)}
+.trade-summary-label{font-family:var(--ff-title);font-size:9px;letter-spacing:1.2px;color:var(--muted);flex:1}
+.trade-summary-value{font-family:var(--ff-title);font-size:18px;font-weight:700;color:var(--amber)}
+.trade-summary-unit{font-size:10px;color:var(--muted)}
 .sa--recall{border-color:rgba(255,200,64,.4);color:#ffc840;background:rgba(255,200,64,.06)}
 .sa--recall:hover{background:rgba(255,200,64,.15)}
 .sa--raid:disabled{opacity:.35;cursor:not-allowed}

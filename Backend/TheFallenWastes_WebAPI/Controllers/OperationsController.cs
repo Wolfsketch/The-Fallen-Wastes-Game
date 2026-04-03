@@ -800,6 +800,41 @@ namespace TheFallenWastes_WebAPI.Controllers
                         int returnSecs = (int)(op.ArrivesAtUtc - op.StartedAtUtc).TotalSeconds;
                         op.MarkReturning(returnSecs);
                     }
+                    // Trade convoy: deliver resources immediately on arrival, then complete.
+                    if (op.OperationType == "send_resources" && op.TargetSettlementId.HasValue)
+                    {
+                        var tradeTarget = await _db.Settlements.Include(s => s.Buildings)
+                            .FirstOrDefaultAsync(s => s.Id == op.TargetSettlementId.Value);
+                        var tradeSender = await _db.Settlements
+                            .FirstOrDefaultAsync(s => s.Id == op.AttackerSettlementId);
+                        if (tradeTarget != null && !string.IsNullOrEmpty(op.SentUnitsJson))
+                        {
+                            var res = JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson) ?? new();
+                            tradeTarget.AddResourcesCapped(
+                                res.GetValueOrDefault("water", 0),
+                                res.GetValueOrDefault("food", 0),
+                                res.GetValueOrDefault("scrap", 0),
+                                res.GetValueOrDefault("fuel", 0),
+                                res.GetValueOrDefault("energy", 0),
+                                res.GetValueOrDefault("rareTech", 0));
+
+                            var tradeTargetPlayer = await _db.Players
+                                .FirstOrDefaultAsync(p => p.Id == tradeTarget.PlayerId);
+                            if (tradeTargetPlayer != null && tradeSender != null)
+                            {
+                                string resList = string.Join(", ", res
+                                    .Where(r => r.Value > 0)
+                                    .Select(r => $"{r.Value} {char.ToUpper(r.Key[0])}{r.Key[1..]}"));
+                                _db.Messages.Add(new Message(
+                                    senderPlayerId: tradeTargetPlayer.Id,
+                                    receiverPlayerId: tradeTargetPlayer.Id,
+                                    subject: $"\ud83d\udce6 Trade Convoy Arrived \u2014 from {tradeSender.Name}",
+                                    body: $"A trade convoy from {tradeSender.Name} has delivered: {resList}.",
+                                    messageType: "notification"));
+                            }
+                        }
+                        op.MarkCompleted("{}");
+                    }
                     // found_settlement: convoy landed — building timer now runs (see arrived block below).
                     // reinforce_settlement stays "arrived" until recalled.
                 }
@@ -1755,6 +1790,67 @@ namespace TheFallenWastes_WebAPI.Controllers
             });
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // POST /api/Operations/settlement/{settlementId}/send-resources
+        // Sends a trade convoy with resources to another player's settlement.
+        // ═══════════════════════════════════════════════════════════════════
+        [HttpPost("settlement/{settlementId}/send-resources")]
+        public async Task<IActionResult> SendResources(Guid settlementId, [FromBody] SendResourcesRequest request)
+        {
+            var sourceSett = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == settlementId);
+            if (sourceSett == null) return NotFound("Source settlement not found.");
+
+            var targetSett = await _db.Settlements
+                .Include(s => s.Buildings)
+                .FirstOrDefaultAsync(s => s.Id == request.TargetSettlementId);
+            if (targetSett == null) return NotFound("Target settlement not found.");
+
+            if (request.TargetSettlementId == settlementId)
+                return BadRequest("Cannot send resources to your own settlement.");
+
+            int total = request.Water + request.Food + request.Scrap + request.Fuel + request.Energy + request.RareTech;
+            if (total <= 0) return BadRequest("Select at least one resource to send.");
+
+            if (!sourceSett.Resources.HasEnough(request.Water, request.Food, request.Scrap, request.Fuel, request.Energy, request.RareTech))
+                return BadRequest("Not enough resources.");
+
+            sourceSett.Resources.Spend(request.Water, request.Food, request.Scrap, request.Fuel, request.Energy, request.RareTech);
+
+            var resourcesJson = JsonSerializer.Serialize(new Dictionary<string, int>
+            {
+                ["water"]   = request.Water,
+                ["food"]    = request.Food,
+                ["scrap"]   = request.Scrap,
+                ["fuel"]    = request.Fuel,
+                ["energy"]  = request.Energy,
+                ["rareTech"]= request.RareTech
+            });
+
+            int travelSeconds = Math.Clamp(request.TravelSeconds, 30, 7 * 24 * 3600);
+            var operation = new Operation(
+                attackerSettlementId: settlementId,
+                targetSettlementId: request.TargetSettlementId,
+                targetPoiId: null,
+                targetPoiLabel: targetSett.Name,
+                operationType: "send_resources",
+                sentUnitsJson: resourcesJson,
+                scoutRareTech: null,
+                raidMode: null,
+                travelSeconds: travelSeconds);
+
+            _db.Operations.Add(operation);
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                operationId = operation.Id,
+                arrivesAtUtc = operation.ArrivesAtUtc,
+                message = "Trade convoy dispatched."
+            });
+        }
+
         // ─── Request DTOs
 
         public class ScoutPoiRequest
@@ -1798,6 +1894,18 @@ namespace TheFallenWastes_WebAPI.Controllers
         {
             public Guid TargetSettlementId { get; set; }
             public Dictionary<string, int> Units { get; set; } = new();
+            public int TravelSeconds { get; set; } = 120;
+        }
+
+        public class SendResourcesRequest
+        {
+            public Guid TargetSettlementId { get; set; }
+            public int Water { get; set; }
+            public int Food { get; set; }
+            public int Scrap { get; set; }
+            public int Fuel { get; set; }
+            public int Energy { get; set; }
+            public int RareTech { get; set; }
             public int TravelSeconds { get; set; } = 120;
         }
 

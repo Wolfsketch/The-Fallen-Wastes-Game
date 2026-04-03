@@ -296,6 +296,12 @@ namespace TheFallenWastes_WebAPI.Controllers
                     return BadRequest($"Not enough {unit} — you have {available}, convoy needs {qty}.");
             }
 
+            // Validate resource cost (500 Scrap, 300 Food, 200 Fuel)
+            const int scrapCost = 500, foodCost = 300, fuelCost = 200;
+            if (!sourceSettlement.Resources.HasEnough(0, foodCost, scrapCost, fuelCost))
+                return BadRequest($"Not enough resources to found a settlement. Required: {scrapCost} Scrap, {foodCost} Food, {fuelCost} Fuel. " +
+                    $"You have: {sourceSettlement.Resources.Scrap} Scrap, {sourceSettlement.Resources.Food} Food, {sourceSettlement.Resources.Fuel} Fuel.");
+
             // Deduct convoy units from source settlement
             foreach (var (unit, qty) in convoy)
             {
@@ -305,6 +311,9 @@ namespace TheFallenWastes_WebAPI.Controllers
                     sourceSettlement.UnitInventory.Remove(unit);
             }
             _db.Entry(sourceSettlement).Property(s => s.UnitInventory).IsModified = true;
+
+            // Deduct founding resource cost
+            sourceSettlement.Resources.Spend(0, foodCost, scrapCost, fuelCost);
 
             // Create the founding operation — travel time from frontend, then 12h build after arrival
             int travelSeconds = Math.Clamp(req.TravelSeconds, 60, 7 * 24 * 3600);

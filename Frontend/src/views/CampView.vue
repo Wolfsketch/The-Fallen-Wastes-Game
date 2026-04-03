@@ -206,13 +206,10 @@
         </div>
         <div v-if="canFoundNewSettlement" class="found-settlement-section">
           <div class="found-ready">🏗 CONQUEST LEVEL {{ player?.conquestLevel }} — New outpost slot available!</div>
-          <div class="found-form">
-            <input v-model="foundName" class="found-input" placeholder="Enter outpost name..." maxlength="40" />
-            <button class="found-btn" :disabled="founding" @click="submitFoundSettlement">
-              {{ founding ? 'ESTABLISHING...' : '+ FOUND OUTPOST' }}
-            </button>
-          </div>
-          <div v-if="foundError" class="found-error">{{ foundError }}</div>
+          <div class="found-hint">Go to the Wasteland Map, select an unclaimed sector, and click <strong>Claim</strong> to found your outpost there.</div>
+          <button class="found-btn" @click="$router.push({ name: 'wasteland' })">
+            🗺 OPEN WASTELAND MAP
+          </button>
         </div>
       </div>
     </div>
@@ -254,7 +251,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { renameSettlement, foundSettlement, getPlayerReports, getPlayerById, organizeTriumph } from '../services/api.js'
+import { renameSettlement, getPlayerReports, getPlayerById, organizeTriumph } from '../services/api.js'
 
 const props = defineProps({
   player: Object,
@@ -290,30 +287,9 @@ async function submitRename() {
 }
 
 // ── Found new settlement ─────────────────────────────────────
-const foundName = ref('')
-const foundError = ref('')
-const founding = ref(false)
-
 const canFoundNewSettlement = computed(() =>
   (props.player?.settlements?.length ?? 1) < (props.player?.maxSettlements ?? 1)
 )
-
-async function submitFoundSettlement() {
-  foundError.value = ''
-  const name = foundName.value.trim()
-  if (name.length < 3) { foundError.value = 'Name must be at least 3 characters.'; return }
-  founding.value = true
-  try {
-    await foundSettlement(props.player.id, name)
-    foundName.value = ''
-    if (props.refreshSettlement) await props.refreshSettlement()
-  } catch (e) {
-    const msg = e?.response?.data?.message || e?.response?.data || 'Could not found outpost.'
-    foundError.value = typeof msg === 'string' ? msg : JSON.stringify(msg)
-  } finally {
-    founding.value = false
-  }
-}
 
 // ── War Raid (Triumph) ───────────────────────────────────────
 const triumphPending = ref(false)
@@ -521,12 +497,11 @@ onMounted(() => {
 .clb-tp { font-size:9px;color:var(--muted);margin-top:2px }
 .clb-unlock { font-size:8px;color:var(--text);margin-top:2px }
 .found-settlement-section { margin-top:16px;padding:12px 14px;border:1px solid rgba(212,175,55,.3);background:rgba(212,175,55,.04) }
-.found-ready { font-size:10px;color:#d4af37;letter-spacing:2px;font-family:var(--ff-title);margin-bottom:10px }
-.found-form { display:flex;gap:8px }
-.found-input { flex:1;background:rgba(0,212,255,.06);border:1px solid var(--border-bright);color:var(--bright);font-size:12px;padding:6px 10px;outline:none }
-.found-btn { background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.5);color:#d4af37;font-family:var(--ff-title);font-size:9px;letter-spacing:1.5px;padding:6px 14px;cursor:pointer;font-weight:700 }
-.found-btn:disabled { opacity:.5;cursor:default }
-.found-error { font-size:10px;color:var(--red);margin-top:6px }
+.found-ready { font-size:10px;color:#d4af37;letter-spacing:2px;font-family:var(--ff-title);margin-bottom:8px }
+.found-hint { font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5 }
+.found-hint strong { color:var(--bright) }
+.found-btn { background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.5);color:#d4af37;font-family:var(--ff-title);font-size:9px;letter-spacing:1.5px;padding:7px 18px;cursor:pointer;font-weight:700 }
+.found-btn:hover { background:rgba(212,175,55,.25) }
 
 /* Resources */
 .res-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:10px }

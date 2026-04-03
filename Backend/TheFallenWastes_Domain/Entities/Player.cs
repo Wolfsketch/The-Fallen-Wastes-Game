@@ -46,6 +46,8 @@ namespace TheFallenWastes_Domain.Entities
         public bool ScoutMasterActive { get; private set; }
         public DateTime? ScoutMasterExpiresUtc { get; private set; }
 
+        public int WastelandCoins { get; private set; }
+
         public ICollection<Settlement> Settlements { get; private set; }
 
         public Guid? AllianceId { get; private set; }
@@ -94,6 +96,8 @@ namespace TheFallenWastes_Domain.Entities
 
             ScoutMasterActive = false;
             ScoutMasterExpiresUtc = null;
+
+            WastelandCoins = 0;
 
             Settlements = new List<Settlement>();
             DataVersion = 1;
@@ -336,6 +340,20 @@ namespace TheFallenWastes_Domain.Entities
 
             AttackScore = attackScore;
             DefenseScore = defenseScore;
+        }
+
+        // WASTELAND COINS
+
+        public void AddWastelandCoins(int amount)
+        {
+            if (amount > 0) WastelandCoins += amount;
+        }
+
+        public bool SpendWastelandCoins(int amount)
+        {
+            if (amount <= 0 || WastelandCoins < amount) return false;
+            WastelandCoins -= amount;
+            return true;
         }
 
         public void AddTriumphPoints(int amount)
