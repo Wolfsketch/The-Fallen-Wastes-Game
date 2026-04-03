@@ -12,6 +12,9 @@ Frontend/.env.production.local
 Backend/**/bin/
 Backend/**/obj/
 
+# Secrets — never commit local config with real keys
+Backend/**/appsettings.Development.json
+
 # Visual Studio
 .vs/
 Backend/.vs/
