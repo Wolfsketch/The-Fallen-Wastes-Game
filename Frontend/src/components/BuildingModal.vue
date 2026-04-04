@@ -87,6 +87,7 @@
           <div class="modal-section-title">REQUIRED RESOURCES</div>
           <div class="costs-grid">
             <div v-for="cost in costItems" :key="cost.label" class="cost-item">
+              <img :src="cost.img" class="cost-icon-img" :alt="cost.label" />
               <span class="cost-label">{{ cost.label }}</span>
               <span class="cost-value" :class="{ 'cost-value--insufficient': !cost.enough }">
                 {{ cost.amount }}
@@ -181,6 +182,12 @@ import TechVaultIcon from '../images/BuildingIcons/TechVault.png'
 import WatchTowerIcon from '../images/BuildingIcons/WatchTower.png'
 import TechLabIcon from '../images/BuildingIcons/TechLab.png'
 import TechSalvagerIcon from '../images/BuildingIcons/TechSalvager.png'
+import resWaterIcon from '../images/Resources/Water.png'
+import resFoodIcon from '../images/Resources/Food.png'
+import resScrapIcon from '../images/Resources/Scrap.png'
+import resFuelIcon from '../images/Resources/Fuel.png'
+import resEnergyIcon from '../images/Resources/Energy.png'
+import resRareTechIcon from '../images/Resources/RareTech.png'
 
 const props = defineProps({
   building: { type: Object, required: true },
@@ -394,12 +401,12 @@ const costItems = computed(() => {
   if (!c) return []
 
   const items = []
-  if (c.water) items.push({ label: '💧 Water', amount: c.water, enough: a.water >= c.water })
-  if (c.food) items.push({ label: '🌾 Food', amount: c.food, enough: a.food >= c.food })
-  if (c.scrap) items.push({ label: '⚙️ Scrap', amount: c.scrap, enough: a.scrap >= c.scrap })
-  if (c.fuel) items.push({ label: '⛽ Fuel', amount: c.fuel, enough: a.fuel >= c.fuel })
-  if (c.energy) items.push({ label: '⚡ Energy', amount: c.energy, enough: a.energy >= c.energy })
-  if (c.rareTech) items.push({ label: '🧬 RareTech', amount: c.rareTech, enough: a.rareTech >= c.rareTech })
+  if (c.water)    items.push({ img: resWaterIcon,    label: 'Water',    amount: c.water,    enough: a.water >= c.water })
+  if (c.food)     items.push({ img: resFoodIcon,     label: 'Food',     amount: c.food,     enough: a.food >= c.food })
+  if (c.scrap)    items.push({ img: resScrapIcon,    label: 'Scrap',    amount: c.scrap,    enough: a.scrap >= c.scrap })
+  if (c.fuel)     items.push({ img: resFuelIcon,     label: 'Fuel',     amount: c.fuel,     enough: a.fuel >= c.fuel })
+  if (c.energy)   items.push({ img: resEnergyIcon,   label: 'Energy',   amount: c.energy,   enough: a.energy >= c.energy })
+  if (c.rareTech) items.push({ img: resRareTechIcon, label: 'RareTech', amount: c.rareTech, enough: a.rareTech >= c.rareTech })
   return items
 })
 
@@ -650,11 +657,19 @@ async function doUpgrade() {
 }
 .cost-item {
   display: flex;
+  align-items: center;
+  gap: 6px;
   justify-content: space-between;
   padding: 6px 12px;
   background: var(--bg3);
   border: 1px solid var(--border);
   font-size: 11px;
+}
+.cost-icon-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .cost-label {
   color: var(--muted);

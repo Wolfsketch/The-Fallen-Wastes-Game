@@ -14,6 +14,7 @@ import DefenseView from "../views/DefenseView.vue";
 import RareTechInventoryView from "../views/RareTechInventoryView.vue";
 import AllianceView from "../views/AllianceView.vue";
 import ReportView from '../views/ReportView.vue';
+import PaymentReturnView from '../views/PaymentReturnView.vue'
 
 const routes = [
     {
@@ -25,6 +26,13 @@ const routes = [
         path: '/worlds',
         name: 'worlds',
         component: WorldSelectView
+    },
+    {
+        // Stripe redirects here after payment — no auth required
+        path: '/payment-return',
+        name: 'payment-return',
+        component: PaymentReturnView,
+        meta: { public: true }
     },
     {
         path: '/game',
@@ -53,6 +61,9 @@ const router = createRouter({
 
 // Navigation guards
 router.beforeEach((to) => {
+    // Public routes (e.g. Stripe payment-return redirect) bypass auth checks
+    if (to.meta?.public) return
+
     const playerId = sessionStorage.getItem('playerId')
     const worldId = sessionStorage.getItem('worldId')
 

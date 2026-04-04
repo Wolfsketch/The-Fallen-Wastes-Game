@@ -102,7 +102,8 @@ namespace TheFallenWastes_WebAPI.Controllers
             // Resolve phase transitions based on current time
             // Collect attacker settlement -> player mapping for report messages
             var attackerSettlementIds = operations
-                .Where(o => o.Phase == "outbound" && now >= o.ArrivesAtUtc)
+                .Where(o => (o.Phase == "outbound" && now >= o.ArrivesAtUtc)
+                         || (o.Phase == "arrived" && o.OperationType == "found_settlement" && o.ResultJson == null))
                 .Select(o => o.AttackerSettlementId)
                 .Distinct()
                 .ToList();
@@ -476,8 +477,12 @@ namespace TheFallenWastes_WebAPI.Controllers
                                     : JsonSerializer.Deserialize<Dictionary<string, int>>(op.SentUnitsJson)
                                       ?? new Dictionary<string, int>();
 
-                                var defUnits = new Dictionary<string, int>(
-                                    defSett.UnitInventory, StringComparer.OrdinalIgnoreCase);
+                                // Self-attack: own garrison doesn't fight — only foreign reinforcements matter.
+                                bool isSelfAttack = atkSett.PlayerId == defSett.PlayerId;
+
+                                var defUnits = isSelfAttack
+                                    ? new Dictionary<string, int>()
+                                    : new Dictionary<string, int>(defSett.UnitInventory, StringComparer.OrdinalIgnoreCase);
 
                                 int atkPower = sentUnitsAtk.Sum(kvp =>
                                     (unitDefs.TryGetValue(kvp.Key, out var ua) ? ua.AttackPower : 10) * kvp.Value);
@@ -539,13 +544,14 @@ namespace TheFallenWastes_WebAPI.Controllers
                                     .ToDictionary(k => k.Key, k => k.Value);
 
                                 // Loot: surviving attacker carry capacity, up to 33% of each resource
+                                // Self-attacks don't loot (you can't steal from yourself).
                                 int carryTotal = atkSurvived.Sum(kvp =>
                                     (unitDefs.TryGetValue(kvp.Key, out var uc) ? uc.CarryCapacity : 10) * kvp.Value);
 
                                 var looted = new Dictionary<string, int>
                                     { ["water"]=0, ["food"]=0, ["scrap"]=0, ["fuel"]=0, ["energy"]=0 };
 
-                                if (atkWins && carryTotal > 0)
+                                if (!isSelfAttack && atkWins && carryTotal > 0)
                                 {
                                     var resPool = new (string name, int avail)[]
                                     {
@@ -572,7 +578,8 @@ namespace TheFallenWastes_WebAPI.Controllers
                                 }
 
                                 // ── Convoy siege check ───────────────────────────────────────
-                                bool sentConvoy = sentUnitsAtk.ContainsKey("Convoy") && sentUnitsAtk["Convoy"] > 0;
+                                // Not applicable for self-attacks (no self-siege).
+                                bool sentConvoy = !isSelfAttack && sentUnitsAtk.ContainsKey("Convoy") && sentUnitsAtk["Convoy"] > 0;
                                 bool convoyInSurvivors = atkSurvived.ContainsKey("Convoy") && atkSurvived["Convoy"] > 0;
 
                                 // Load atkPlayer and defPlayer first (needed for siege and reports)

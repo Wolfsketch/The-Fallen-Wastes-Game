@@ -128,6 +128,7 @@
             <div class="cancel-refund-title">REFUND PREVIEW — 75%</div>
             <div class="cancel-refund-grid">
               <div v-for="r in refundPreview(confirmCancel.cost)" :key="r.label" class="cancel-refund-item">
+                <img :src="r.img" class="refund-res-icon" :alt="r.label" />
                 <span class="refund-icon-label">{{ r.label }}</span>
                 <span class="refund-amount">+{{ r.amount }}</span>
               </div>
@@ -241,6 +242,12 @@ import TechVaultIcon from '../images/BuildingIcons/TechVault.png'
 import WatchTowerIcon from '../images/BuildingIcons/WatchTower.png'
 import TechLabIcon from '../images/BuildingIcons/TechLab.png'
 import TechSalvagerIcon from '../images/BuildingIcons/TechSalvager.png'
+import resWaterIcon from '../images/Resources/Water.png'
+import resFoodIcon from '../images/Resources/Food.png'
+import resScrapIcon from '../images/Resources/Scrap.png'
+import resFuelIcon from '../images/Resources/Fuel.png'
+import resEnergyIcon from '../images/Resources/Energy.png'
+import resRareTechIcon from '../images/Resources/RareTech.png'
 
 const props = defineProps({
   player: Object,
@@ -292,22 +299,22 @@ function closeCancelConfirm() {
 }
 
 const REFUND_KEYS = [
-  { key: 'water',    label: '💧 Water' },
-  { key: 'food',     label: '🌾 Food' },
-  { key: 'scrap',    label: '⚙️ Scrap' },
-  { key: 'fuel',     label: '⛽ Fuel' },
-  { key: 'energy',   label: '⚡ Energy' },
-  { key: 'rareTech', label: '🧬 RareTech' }
+  { key: 'water',    label: 'Water',    img: resWaterIcon },
+  { key: 'food',     label: 'Food',     img: resFoodIcon },
+  { key: 'scrap',    label: 'Scrap',    img: resScrapIcon },
+  { key: 'fuel',     label: 'Fuel',     img: resFuelIcon },
+  { key: 'energy',   label: 'Energy',   img: resEnergyIcon },
+  { key: 'rareTech', label: 'RareTech', img: resRareTechIcon }
 ]
 
 function refundPreview(cost) {
   if (!cost) return null
   const out = []
-  for (const { key, label } of REFUND_KEYS) {
+  for (const { key, label, img } of REFUND_KEYS) {
     // Accept both camelCase (water) and PascalCase (Water) from the backend
     const raw = cost[key] ?? cost[key[0].toUpperCase() + key.slice(1)] ?? 0
     const v = Number(raw) || 0
-    if (v > 0) out.push({ label, amount: Math.ceil(v * 0.75) })
+    if (v > 0) out.push({ label, img, amount: Math.ceil(v * 0.75) })
   }
   return out.length > 0 ? out : null
 }
@@ -1147,6 +1154,7 @@ onUnmounted(() => {
   padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
   min-width: 80px;
 }
+.refund-res-icon { width:32px;height:32px;object-fit:contain;flex-shrink:0; }
 .refund-icon-label { font-size: 10px; color: var(--muted); }
 .refund-amount { font-size: 14px; color: var(--green); font-family: var(--ff-title); font-weight: 700; }
 .cancel-note {

@@ -227,7 +227,7 @@
               <div class="cost-title">RESEARCH COST</div>
               <div class="cost-grid">
                 <div class="cost-item" :class="{ 'cost-item--insufficient': currentRareTech < (research.rareTechCost ?? 0) }">
-                  <span class="cost-icon">🧬</span>
+                  <img :src="resRareTechIcon" class="cost-icon" alt="RareTech" />
                   <span>{{ research.rareTechCost ?? 0 }}</span>
                 </div>
                 <div class="cost-item">
@@ -430,6 +430,7 @@ import {
   getSalvageInventory,
   processSalvageItem
 } from '../services/api'
+import resRareTechIcon from '../images/Resources/RareTech.png'
 
 const props = defineProps({
   player: Object,
@@ -944,7 +945,7 @@ onUnmounted(() => {
 .cost-title{font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
 .cost-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .cost-item{border:1px solid var(--border);background:rgba(255,255,255,.02);padding:8px 6px;display:flex;align-items:center;gap:6px;justify-content:center;font-size:12px;color:#f0f7ff;transition:all .15s}
-.cost-icon{opacity:.95;font-size:14px;line-height:1}
+.cost-icon{width:44px;height:44px;object-fit:contain;flex-shrink:0}
 
 .research-time{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);background:rgba(255,255,255,.01)}
 .time-icon{font-size:16px}

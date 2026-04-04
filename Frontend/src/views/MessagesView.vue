@@ -240,11 +240,11 @@
                 {{ parsedReportBody.isDefenseReport ? 'RESOURCES PLUNDERED' : 'PLUNDER COLLECTED' }}
               </div>
               <div class="report-loot-box">
-                <div v-if="parsedReportBody.lootedResources.water  > 0" class="report-loot-item">💧 Water  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.water }}</div>
-                <div v-if="parsedReportBody.lootedResources.food   > 0" class="report-loot-item">🥫 Food   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.food }}</div>
-                <div v-if="parsedReportBody.lootedResources.scrap  > 0" class="report-loot-item">⚙️ Scrap  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.scrap }}</div>
-                <div v-if="parsedReportBody.lootedResources.fuel   > 0" class="report-loot-item">⛽ Fuel   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.fuel }}</div>
-                <div v-if="parsedReportBody.lootedResources.energy > 0" class="report-loot-item">⚡ Energy {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.energy }}</div>
+                <div v-if="parsedReportBody.lootedResources.water  > 0" class="report-loot-item"><img :src="resWaterIcon" class="loot-res-icon" alt="Water" /> Water  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.water }}</div>
+                <div v-if="parsedReportBody.lootedResources.food   > 0" class="report-loot-item"><img :src="resFoodIcon" class="loot-res-icon" alt="Food" /> Food   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.food }}</div>
+                <div v-if="parsedReportBody.lootedResources.scrap  > 0" class="report-loot-item"><img :src="resScrapIcon" class="loot-res-icon" alt="Scrap" /> Scrap  {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.scrap }}</div>
+                <div v-if="parsedReportBody.lootedResources.fuel   > 0" class="report-loot-item"><img :src="resFuelIcon" class="loot-res-icon" alt="Fuel" /> Fuel   {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.fuel }}</div>
+                <div v-if="parsedReportBody.lootedResources.energy > 0" class="report-loot-item"><img :src="resEnergyIcon" class="loot-res-icon" alt="Energy" /> Energy {{ parsedReportBody.isDefenseReport ? '−' : '+' }}{{ parsedReportBody.lootedResources.energy }}</div>
               </div>
             </template>
             <div v-else-if="parsedReportBody.attackerWins && !parsedReportBody.isDefenseReport"
@@ -442,6 +442,11 @@ import {
   getReportMessages,
   deleteMessage
 } from '../services/api.js'
+import resWaterIcon from '../images/Resources/Water.png'
+import resFoodIcon from '../images/Resources/Food.png'
+import resScrapIcon from '../images/Resources/Scrap.png'
+import resFuelIcon from '../images/Resources/Fuel.png'
+import resEnergyIcon from '../images/Resources/Energy.png'
 
 const route = useRoute()
 
@@ -1330,7 +1335,8 @@ watch(() => route.query, () => {
   background: rgba(0,212,255,.03);
   border: 1px solid var(--border);
 }
-.report-loot-item { font-size: 11px; color: var(--green); padding: 3px 0; }
+.report-loot-item { display:flex;align-items:center;gap:5px;font-size: 11px; color: var(--green); padding: 3px 0; }
+.loot-res-icon { width:32px;height:32px;object-fit:contain;flex-shrink:0; }
 .report-tp-row {
   display: flex;
   align-items: center;

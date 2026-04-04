@@ -103,34 +103,34 @@
         <div class="panel-title"><span class="panel-dot" /> RESOURCE STOCKPILE</div>
         <div class="res-grid">
           <div class="res-item">
-            <div class="res-icon">💧</div>
+            <img :src="waterResIcon" class="res-icon" alt="Water" />
             <div class="res-label">WATER</div>
             <div class="res-value" :style="{color: (settlement?.water ?? 0) < 200 ? 'var(--red)' : 'var(--text)'}">
               {{ (settlement?.water ?? 0).toLocaleString() }}
             </div>
           </div>
           <div class="res-item">
-            <div class="res-icon">🌾</div>
+            <img :src="foodResIcon" class="res-icon" alt="Food" />
             <div class="res-label">FOOD</div>
             <div class="res-value">{{ (settlement?.food ?? 0).toLocaleString() }}</div>
           </div>
           <div class="res-item">
-            <div class="res-icon">⚙️</div>
+            <img :src="scrapResIcon" class="res-icon" alt="Scrap" />
             <div class="res-label">SCRAP</div>
             <div class="res-value">{{ (settlement?.scrap ?? 0).toLocaleString() }}</div>
           </div>
           <div class="res-item">
-            <div class="res-icon">⛽</div>
+            <img :src="fuelResIcon" class="res-icon" alt="Fuel" />
             <div class="res-label">FUEL</div>
             <div class="res-value">{{ (settlement?.fuel ?? 0).toLocaleString() }}</div>
           </div>
           <div class="res-item">
-            <div class="res-icon">⚡</div>
+            <img :src="energyResIcon" class="res-icon" alt="Energy" />
             <div class="res-label">ENERGY</div>
             <div class="res-value">{{ (settlement?.energy ?? 0).toLocaleString() }}</div>
           </div>
           <div class="res-item">
-            <div class="res-icon">🔬</div>
+            <img :src="rareTechResIcon" class="res-icon" alt="RareTech" />
             <div class="res-label">RARETECH</div>
             <div class="res-value" style="color:#d4af37">{{ (settlement?.rareTech ?? 0).toLocaleString() }}</div>
           </div>
@@ -252,6 +252,12 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { renameSettlement, getPlayerReports, getPlayerById, organizeTriumph } from '../services/api.js'
+import waterResIcon from '../images/Resources/Water.png'
+import foodResIcon from '../images/Resources/Food.png'
+import scrapResIcon from '../images/Resources/Scrap.png'
+import fuelResIcon from '../images/Resources/Fuel.png'
+import energyResIcon from '../images/Resources/Energy.png'
+import rareTechResIcon from '../images/Resources/RareTech.png'
 
 const props = defineProps({
   player: Object,
@@ -506,7 +512,7 @@ onMounted(() => {
 /* Resources */
 .res-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:10px }
 .res-item { background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.08);padding:10px;text-align:center }
-.res-icon { font-size:16px;margin-bottom:4px }
+.res-icon { width:90px;height:90px;object-fit:contain;margin-bottom:4px }
 .res-label { font-size:7px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px }
 .res-value { font-family:var(--ff-title);font-size:14px;color:var(--text);font-weight:700 }
 

@@ -1284,9 +1284,20 @@ namespace TheFallenWastes_WebAPI.Controllers
                 int toDeliver = unitsReady - item.DeliveredQuantity;
                 if (toDeliver > 0)
                 {
-                    settlement.AddUnits(item.UnitName, toDeliver, item.PopulationCostPerUnit);
-                    item.DeliverUnits(toDeliver);
-                    totalDelivered += toDeliver;
+                    // Cap delivery to what population can actually accommodate.
+                    // If population is full, skip delivery this tick without crashing —
+                    // units will be delivered once the player frees up housing capacity.
+                    int maxByPopulation = item.PopulationCostPerUnit > 0
+                        ? settlement.AvailablePopulation / item.PopulationCostPerUnit
+                        : toDeliver;
+
+                    int canDeliver = Math.Min(toDeliver, maxByPopulation);
+                    if (canDeliver > 0)
+                    {
+                        settlement.AddUnits(item.UnitName, canDeliver, item.PopulationCostPerUnit);
+                        item.DeliverUnits(canDeliver);
+                        totalDelivered += canDeliver;
+                    }
                 }
 
                 if (item.DeliveredQuantity >= item.Quantity || now >= item.EndsAtUtc)

@@ -325,7 +325,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'water', getQuantity(unit.name)) }"
                     title="Water"
                 >
-                  <span class="cost-icon">💧</span>
+                  <img :src="resWaterIcon" class="cost-icon" alt="Water" />
                   <span>{{ getTotalCost(unit, 'water', getQuantity(unit.name)) }}</span>
                 </div>
 
@@ -334,7 +334,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'food', getQuantity(unit.name)) }"
                     title="Food"
                 >
-                  <span class="cost-icon">🥫</span>
+                  <img :src="resFoodIcon" class="cost-icon" alt="Food" />
                   <span>{{ getTotalCost(unit, 'food', getQuantity(unit.name)) }}</span>
                 </div>
 
@@ -352,7 +352,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'scrap', getQuantity(unit.name)) }"
                     title="Scrap"
                 >
-                  <span class="cost-icon">⚙️</span>
+                  <img :src="resScrapIcon" class="cost-icon" alt="Scrap" />
                   <span>{{ getTotalCost(unit, 'scrap', getQuantity(unit.name)) }}</span>
                 </div>
 
@@ -361,7 +361,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'fuel', getQuantity(unit.name)) }"
                     title="Fuel"
                 >
-                  <span class="cost-icon">⛽</span>
+                  <img :src="resFuelIcon" class="cost-icon" alt="Fuel" />
                   <span>{{ getTotalCost(unit, 'fuel', getQuantity(unit.name)) }}</span>
                 </div>
 
@@ -370,7 +370,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'energy', getQuantity(unit.name)) }"
                     title="Energy"
                 >
-                  <span class="cost-icon">⚡</span>
+                  <img :src="resEnergyIcon" class="cost-icon" alt="Energy" />
                   <span>{{ getTotalCost(unit, 'energy', getQuantity(unit.name)) }}</span>
                 </div>
 
@@ -379,7 +379,7 @@
                     :class="{ 'cost-item--insufficient': !hasEnoughResource(unit, 'rareTech', getQuantity(unit.name)) }"
                     title="Rare Tech"
                 >
-                  <span class="cost-icon">🧬</span>
+                  <img :src="resRareTechIcon" class="cost-icon" alt="RareTech" />
                   <span>{{ getTotalCost(unit, 'rareTech', getQuantity(unit.name)) }}</span>
                 </div>
               </div>
@@ -433,27 +433,37 @@ import {
   activateCommanderApi
 } from '../services/api'
 
-import scavengerImg from '../images/Scavenger.png'
-import raiderImg from '../images/Raider.png'
-import outpostDefenderImg from '../images/Outpost Defender.png'
-import riflemanImg from '../images/Rifleman.png'
-import shockFighterImg from '../images/Shock Fighter.png'
-import sniperImg from '../images/Sniper.png'
-import flameTrooperImg from '../images/Flame Trooper.png'
-import powerTrooperImg from '../images/Power Trooper.png'
-import assaultBikeImg from '../images/Assault Bike.png'
-import rustBuggyImg from '../images/Rust Buggy.png'
-import warRigImg from '../images/War Rig.png'
-import interceptorImg from '../images/Interceptor.png'
-import siegeCarrierImg from '../images/Siege Carrier.png'
-import convoyImg from '../images/Convoy.png'
-import wallBreakerImg from '../images/Wall Breaker.png'
+import scavengerImg from '../images/Units/Scavenger.png'
+import raiderImg from '../images/Units/Raider.png'
+import outpostDefenderImg from '../images/Units/Outpost Defender.png'
+import riflemanImg from '../images/Units/Rifleman.png'
+import shockFighterImg from '../images/Units/Shock Fighter.png'
+import sniperImg from '../images/Units/Sniper.png'
+import flameTrooperImg from '../images/Units/Flame Trooper.png'
+import powerTrooperImg from '../images/Units/Power Trooper.png'
+import assaultBikeImg from '../images/Units/Assault Bike.png'
+import rustBuggyImg from '../images/Units/Rust Buggy.png'
+import warRigImg from '../images/Units/War Rig.png'
+import interceptorImg from '../images/Units/Interceptor.png'
+import siegeCarrierImg from '../images/Units/Siege Carrier.png'
+import convoyImg from '../images/Units/Convoy.png'
+import wallBreakerImg from '../images/Units/Wall Breaker.png'
+import droneSwarmImg from '../images/Units/Drone Swarm.png'
+import empLauncherImg from '../images/Units/EMP Launcher.png'
+import laserSquadImg from '../images/Units/Laser Squad.png'
+import radBomberImg from '../images/Units/Rad Bomber.png'
 
 import ballisticIcon from '../images/special icons/Ballistic.png'
 import impactIcon from '../images/special icons/Impact.png'
 import energyIcon from '../images/special icons/Energy.png'
 import speedIcon from '../images/special icons/Speed.png'
 import carryIcon from '../images/special icons/Carry.png'
+import resWaterIcon from '../images/Resources/Water.png'
+import resFoodIcon from '../images/Resources/Food.png'
+import resScrapIcon from '../images/Resources/Scrap.png'
+import resFuelIcon from '../images/Resources/Fuel.png'
+import resEnergyIcon from '../images/Resources/Energy.png'
+import resRareTechIcon from '../images/Resources/RareTech.png'
 
 const props = defineProps({
   player: Object,
@@ -545,7 +555,11 @@ const unitImages = {
   Interceptor: interceptorImg,
   'Siege Carrier': siegeCarrierImg,
   Convoy: convoyImg,
-  'Wall Breaker': wallBreakerImg
+  'Wall Breaker': wallBreakerImg,
+  'Drone Swarm': droneSwarmImg,
+  'EMP Launcher': empLauncherImg,
+  'Laser Squad': laserSquadImg,
+  'Rad Bomber': radBomberImg
 }
 
 const FACILITY_MAP = [
@@ -1762,7 +1776,9 @@ async function fetchTrainingQueue() {
 
 .cost-icon {
   opacity: .95;
-  font-size: 14px;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
   line-height: 1;
   flex-shrink: 0;
   transition: transform .18s ease,filter .18s ease;

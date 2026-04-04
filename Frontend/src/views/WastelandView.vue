@@ -158,7 +158,9 @@
                   <div class="movement-right">
                     <div class="movement-status" style="color:var(--amber)">⧖</div>
                     <div class="movement-time" style="color:var(--amber)">
-                      {{ formatTravelTime(Math.max(0, Math.ceil((new Date(op.arrivesAtUtc).getTime() + 12*3600*1000 - Date.now()) / 1000))) }} left
+                      {{ (new Date(op.arrivesAtUtc).getTime() + 12*3600*1000 > Date.now())
+                          ? formatTravelTime(Math.ceil((new Date(op.arrivesAtUtc).getTime() + 12*3600*1000 - Date.now()) / 1000)) + ' left'
+                          : 'Finalizing...' }}
                     </div>
                   </div>
                 </div>
@@ -191,13 +193,6 @@
             </div>
           </div>
         </div>
-
-        <button v-if="scoutMasterActive"
-                class="tb-btn tb-planner-btn"
-                @click="showAttackPlanner = true"
-                title="Attack Planner">
-          📋 PLANNER
-        </button>
 
         <div class="tb-movements">
           <button class="tb-btn tb-notes-btn" @click="showNotes = !showNotes" title="Notities">
@@ -314,7 +309,26 @@
             <div><div class="sp-n">{{ sel.name }}</div><div class="sp-s"><span class="sp-t" :class="`st--${sel.status}`">{{ sel.status.toUpperCase() }}</span>{{ sel.owner ? 'Owner: ' + sel.owner : 'Unclaimed' }}</div></div>
           </div>
           <template v-if="sel.status === 'yours'">
-            <div class="ss-w"><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ player?.score }}</div></div><div class="ss"><div class="ssl">ATTACK</div><div class="ssv">{{ player?.attackScore ?? 0 }}</div></div><div class="ss"><div class="ssl">DEFENSE</div><div class="ssv">{{ player?.defenseScore ?? 0 }}</div></div></div>
+            <!-- Currently active settlement: show player stats -->
+            <template v-if="sel.id === settlement?.id">
+              <div class="ss-w"><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ player?.score }}</div></div><div class="ss"><div class="ssl">ATTACK</div><div class="ssv">{{ player?.attackScore ?? 0 }}</div></div><div class="ss"><div class="ssl">DEFENSE</div><div class="ssv">{{ player?.defenseScore ?? 0 }}</div></div></div>
+            </template>
+            <!-- Own other settlement: show inter-settlement actions -->
+            <template v-else>
+              <div class="ss-w">
+                <div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score ?? player?.score }}</div></div>
+                <div class="ss"><div class="ssl">POWER</div><div class="ssv">{{ sel.power ?? '—' }}</div></div>
+                <div class="ss"><div class="ssl">DEFENSE</div><div class="ssv">{{ sel.defense ?? '—' }}</div></div>
+              </div>
+              <div class="sp-actions">
+                <div class="sa-w">
+                  <button class="sa sa--switch" @click="doSwitchSettlement(sel)">⌂ Switch</button>
+                  <button class="sa sa--trade" @click="openTradeModal()">📦 Send Resources</button>
+                  <button class="sa sa--reinforce" @click="openReinforceSettlementModal()">⛊ Reinforce</button>
+                  <button class="sa sa--a" @click="openAttackModal('settlement')" title="Attack to remove enemy troops or break a siege">⚔ Attack</button>
+                </div>
+              </div>
+            </template>
           </template>
           <template v-if="sel.status === 'ally'">
             <div class="ss-w"><div class="ss"><div class="ssl">OWNER</div><div class="ssv ssv--a">{{ sel.owner }}</div></div><div class="ss"><div class="ssl">ALLIANCE</div><div class="ssv ssv--a">{{ sel.alliance || '—' }}</div></div><div class="ss"><div class="ssl">SCORE</div><div class="ssv">{{ sel.score }}</div></div></div>
@@ -786,7 +800,7 @@ function getUnitImage(name) {
   return unitImages[`../images/${name}.png`] ?? null
 }
 
-const props = defineProps({ player: Object, settlement: Object, refreshSettlement: Function })
+const props = defineProps({ player: Object, settlement: Object, refreshSettlement: Function, switchSettlement: Function })
 const player = computed(() => props.player)
 const settlement = computed(() => props.settlement)
 
@@ -1390,6 +1404,17 @@ async function loadOperations() {
       return true
     })
 
+    // Detect completed found_settlement ops: were "arrived" before, now gone → refresh settlement list
+    const hadArrivedFounding = operations.value.some(op =>
+      op.operationType === 'found_settlement' && op.phase === 'arrived'
+    )
+    const stillHasArrived = newOps.some(op =>
+      op.operationType === 'found_settlement' && op.phase === 'arrived'
+    )
+    if (hadArrivedFounding && !stillHasArrived && props.refreshSettlement) {
+      props.refreshSettlement()
+    }
+
     operations.value = [...newOps, ...existingOutbound]
 
     resolveOperationCoords()
@@ -1876,6 +1901,11 @@ function statusIcon(s) {
 }
 function ownerColor(s) { return { enemy: 'ssv--e', neutral: 'ssv--n' }[s] || '' }
 function selectSlot(s) { selPoi.value = null; sel.value = s }
+
+function doSwitchSettlement(s) {
+  sel.value = null
+  if (props.switchSettlement) props.switchSettlement(s)
+}
 function selectPoi(p) { sel.value = null; selPoi.value = p }
 
 let panFrame = null
@@ -2332,6 +2362,8 @@ onUnmounted(() => {
 .sa--p{background:rgba(180,128,255,.06);border-color:rgba(180,128,255,.2);color:#b480ff}
 .sa--c{background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:var(--cyan)}
 .sa--c:hover{box-shadow:0 0 10px rgba(0,212,255,.15)}
+.sa--switch{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.5);color:var(--cyan);font-weight:700}
+.sa--switch:hover{box-shadow:0 0 12px rgba(0,212,255,.25)}
 .sa--e{background:rgba(255,60,60,.06);border-color:rgba(255,60,60,.25);color:#ff7060}
 .sa--e:hover{box-shadow:0 0 10px rgba(255,60,60,.15)}
 .sa--n{background:rgba(255,200,60,.06);border-color:rgba(255,200,60,.25);color:#ffc830}

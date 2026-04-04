@@ -1,7 +1,7 @@
 <template>
   <div class="game-layout" v-if="player" :class="{ 'under-attack': underAttack }">
     <header class="topbar">
-      <div class="topbar-scan" />
+      <div class="topbar-scan-wrap"><div class="topbar-scan" /></div>
 
       <div class="topbar-left">
         <div class="topbar-radar">
@@ -70,7 +70,7 @@
             class="resource-fill"
             :style="{ width: Math.min(100, (r.val / r.max) * 100) + '%' }"
         />
-        <span class="resource-icon">{{ r.icon }}</span>
+        <img :src="r.img" class="resource-icon" :alt="r.key" />
         <div class="resource-info">
           <div class="resource-header">
             <span class="resource-label">{{ r.key }}</span>
@@ -188,9 +188,11 @@
 
       <main class="content">
         <router-view
+            :key="settlement?.id"
             :player="player"
             :settlement="settlement"
             :refresh-settlement="refreshGameData"
+            :switch-settlement="switchSettlement"
             :live-resources="liveSettlementResources"
             :live-population="livePopulation"
         />
@@ -226,6 +228,12 @@ import { getPlayerById, getSettlement, getUnreadMessageCount } from '../services
 import AdvisorBar from '../components/AdvisorBar.vue'
 import ColaShopModal from '../components/ColaShopModal.vue'
 import colaIcon from '../images/Currency/Wasteland Cola.png'
+import waterResIcon from '../images/Resources/Water.png'
+import foodResIcon from '../images/Resources/Food.png'
+import scrapResIcon from '../images/Resources/Scrap.png'
+import fuelResIcon from '../images/Resources/Fuel.png'
+import energyResIcon from '../images/Resources/Energy.png'
+import rareTechResIcon from '../images/Resources/RareTech.png'
 
 const router = useRouter()
 
@@ -325,12 +333,12 @@ const resources = computed(() => {
 
     const s = settlement.value
     return [
-      { key: 'Water', icon: '💧', val: s.water ?? 0, rate: 0, max: caps.water },
-      { key: 'Food', icon: '🥫', val: s.food ?? 0, rate: 0, max: caps.food },
-      { key: 'Scrap', icon: '⚙️', val: s.scrap ?? 0, rate: 0, max: caps.scrap },
-      { key: 'Fuel', icon: '⛽', val: s.fuel ?? 0, rate: 0, max: caps.fuel },
-      { key: 'Energy', icon: '⚡', val: s.energy ?? 0, rate: 0, max: caps.energy },
-      { key: 'RareTech', icon: '🔬', val: s.rareTech ?? 0, rate: 0, max: caps.rareTech },
+      { key: 'Water',    img: waterResIcon,    val: s.water ?? 0,    rate: 0, max: caps.water },
+      { key: 'Food',     img: foodResIcon,     val: s.food ?? 0,     rate: 0, max: caps.food },
+      { key: 'Scrap',    img: scrapResIcon,    val: s.scrap ?? 0,    rate: 0, max: caps.scrap },
+      { key: 'Fuel',     img: fuelResIcon,     val: s.fuel ?? 0,     rate: 0, max: caps.fuel },
+      { key: 'Energy',   img: energyResIcon,   val: s.energy ?? 0,   rate: 0, max: caps.energy },
+      { key: 'RareTech', img: rareTechResIcon, val: s.rareTech ?? 0, rate: 0, max: caps.rareTech },
     ]
   }
 
@@ -341,42 +349,42 @@ const resources = computed(() => {
   return [
     {
       key: 'Water',
-      icon: '💧',
+      img: waterResIcon,
       val: Math.min(caps.water, Math.floor(b.water + p.water * elapsedHours)),
       rate: p.water,
       max: caps.water
     },
     {
       key: 'Food',
-      icon: '🥫',
+      img: foodResIcon,
       val: Math.min(caps.food, Math.floor(b.food + p.food * elapsedHours)),
       rate: p.food,
       max: caps.food
     },
     {
       key: 'Scrap',
-      icon: '⚙️',
+      img: scrapResIcon,
       val: Math.min(caps.scrap, Math.floor(b.scrap + p.scrap * elapsedHours)),
       rate: p.scrap,
       max: caps.scrap
     },
     {
       key: 'Fuel',
-      icon: '⛽',
+      img: fuelResIcon,
       val: Math.min(caps.fuel, Math.floor(b.fuel + p.fuel * elapsedHours)),
       rate: p.fuel,
       max: caps.fuel
     },
     {
       key: 'Energy',
-      icon: '⚡',
+      img: energyResIcon,
       val: Math.min(caps.energy, Math.floor(b.energy + p.energy * elapsedHours)),
       rate: p.energy,
       max: caps.energy
     },
     {
       key: 'RareTech',
-      icon: '🔬',
+      img: rareTechResIcon,
       val: Math.min(caps.rareTech, Math.floor(b.rareTech + p.rareTech * elapsedHours)),
       rate: p.rareTech,
       max: caps.rareTech
@@ -710,9 +718,16 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #0c1420, var(--bg));
   border-bottom: 1px solid var(--border);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
+.topbar-scan-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
 .topbar-scan {
   position: absolute;
   top: 0;
@@ -850,8 +865,11 @@ onUnmounted(() => {
 }
 
 .resource-icon {
-  font-size: 13px;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .resource-info {

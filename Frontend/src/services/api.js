@@ -74,6 +74,11 @@ export async function createPaymentIntent(playerId, packageId) {
     return response.data // { clientSecret, paymentIntentId }
 }
 
+export async function getPaymentStatus(paymentIntentId) {
+    const response = await api.get(`/Payment/status/${paymentIntentId}`)
+    return response.data // { status, packageId, colaAmount, amountCents }
+}
+
 export async function organizeTriumph(playerId) {
     const response = await api.post(`/Players/${playerId}/triumph`)
     return response.data

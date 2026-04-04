@@ -86,6 +86,7 @@
         <div v-if="error" class="cola-error">{{ error }}</div>
 
         <div class="pay-body">
+          <!-- Single Payment Element with all methods as tabs (iDEAL, Bancontact, Card, SEPA, Klarna, PayPal, Link, ...) -->
           <div id="stripe-payment-element" class="stripe-element-container"></div>
 
           <div class="pay-actions">
@@ -99,7 +100,7 @@
           </div>
 
           <div class="pay-secure-note">
-            <span class="pay-lock">&#x1F512;</span> Secured by Stripe &mdash; Bancontact, iDEAL, Visa, Mastercard accepted
+            <span class="pay-lock">&#x1F512;</span> Secured by Stripe &mdash; Card, Bancontact, iDEAL, SEPA, PayPal, Klarna, Apple Pay, Google Pay
           </div>
         </div>
       </template>
@@ -194,49 +195,61 @@ async function mountStripeElement(publishableKey, clientSecret) {
     theme: 'night',
     variables: {
       colorPrimary: '#ffa600',
-      colorBackground: '#0a1018',
+      colorBackground: '#060d15',
       colorText: '#c8d8ea',
       colorDanger: '#ff4030',
       fontFamily: 'monospace, system-ui',
       borderRadius: '0px',
-      spacingUnit: '4px',
-      // Keep icons and text amber on selected tab (prevents the black-icon bug)
-      colorIconTab: '#8ca0b8',
-      colorIconTabSelected: '#ffa600',
+      spacingUnit: '5px',
     },
     rules: {
+      // ── Inputs ────────────────────────────────────────────────────────────
       '.Input': {
-        border: '1px solid rgba(255,166,0,0.3)',
-        backgroundColor: 'rgba(0,0,0,0.4)',
+        border: '1px solid rgba(255,166,0,0.25)',
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        color: '#c8d8ea',
+        boxShadow: 'none',
       },
       '.Input:focus': {
-        border: '1px solid rgba(255,166,0,0.8)',
-        boxShadow: '0 0 0 2px rgba(255,166,0,0.15)',
+        border: '1px solid rgba(255,166,0,0.75)',
+        boxShadow: '0 0 0 2px rgba(255,166,0,0.12)',
       },
+      '.Input--invalid': {
+        border: '1px solid rgba(255,60,48,0.7)',
+        boxShadow: '0 0 0 2px rgba(255,60,48,0.1)',
+      },
+      // ── Labels ────────────────────────────────────────────────────────────
       '.Label': {
-        color: '#8ca0b8',
-        letterSpacing: '1px',
+        color: '#6a82a0',
+        letterSpacing: '1.5px',
         textTransform: 'uppercase',
+        fontSize: '9px',
+      },
+      // ── Error ─────────────────────────────────────────────────────────────
+      '.Error': {
+        color: '#ff6050',
         fontSize: '10px',
+        letterSpacing: '0.5px',
       },
-      '.Tab': {
-        border: '1px solid rgba(255,166,0,0.2)',
-        backgroundColor: 'rgba(0,0,0,0.3)',
+      // ── Accordion rows ────────────────────────────────────────────────────
+      // These are the only documented accordion selectors in the Stripe Appearance API.
+      // Each payment method is shown as a full-width accordion row — no overflow menu.
+      '.AccordionItem': {
+        backgroundColor: 'rgba(4,10,18,0.9)',
+        border: '1px solid rgba(255,166,0,0.15)',
         color: '#8ca0b8',
+        boxShadow: 'none',
       },
-      '.Tab:hover': {
+      '.AccordionItem:hover': {
+        backgroundColor: 'rgba(255,166,0,0.04)',
+        border: '1px solid rgba(255,166,0,0.35)',
         color: '#c8d8ea',
+      },
+      '.AccordionItem--selected': {
         backgroundColor: 'rgba(255,166,0,0.06)',
-      },
-      '.Tab--selected': {
-        border: '1px solid rgba(255,166,0,0.7)',
-        backgroundColor: 'rgba(255,166,0,0.08)',
-        // Explicit color overrides the night-theme black-on-light default
+        border: '1px solid rgba(255,166,0,0.65)',
         color: '#ffa600',
-      },
-      '.Tab--selected:hover': {
-        backgroundColor: 'rgba(255,166,0,0.12)',
-        color: '#ffa600',
+        boxShadow: '0 0 12px rgba(255,166,0,0.08)',
       },
     },
   }
@@ -244,9 +257,17 @@ async function mountStripeElement(publishableKey, clientSecret) {
   // locale: 'en' forces all Stripe UI text to English regardless of browser language
   elements = stripe.elements({ clientSecret, appearance, locale: 'en' })
 
+  // Accordion layout: all methods shown as a vertical list — no overflow dropdown.
+  // This is the cleanest layout for many payment methods in a constrained modal.
+  // .AccordionItem and .AccordionItem--selected are the only documented accordion selectors.
   paymentElement = elements.create('payment', {
-    layout: 'tabs',
-    paymentMethodOrder: ['ideal', 'bancontact', 'card'],
+    layout: {
+      type: 'accordion',
+      defaultCollapsed: false,
+      radios: 'auto',
+      spacedAccordionItems: false,
+    },
+    paymentMethodOrder: ['ideal', 'bancontact', 'card', 'sepa_debit', 'klarna', 'paypal', 'link'],
   })
 
   paymentElement.mount('#stripe-payment-element')
